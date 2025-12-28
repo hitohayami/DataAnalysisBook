@@ -1,3 +1,10 @@
-This repository is on the example codes of <i> Knowledge and Technique of the Data Analysis </i>, a book written by Hitoshi Hayami in Japanese, and it will be soon published from Baifukan Pub. Co.
-This site contains mainly quarto markdown files .qdm, which include codes written in R and Python as in the above book.
-The results (mainly graphics file of MS Word format) shall be added later.
+# Example Codes for "Knowledge and Technique of the Data Analysis"
+
+This repository contains the source code for the book **"Knowledge and Technique of the Data Analysis"** (Japanese Title: データ分析の知識と技術 *[※ここ正しい日本語タイトルを入れてください]*), written by **Hitoshi Hayami**. The book is scheduled to be published by **Baifukan**.
+
+## Repository Contents
+* **Quarto Markdown (`.qmd`)**: Contains the R and Python code examples presented in the book.
+* **Languages**: R, Python
+
+## Note
+The output results (primarily graphics in MS Word format) are currently work in progress and will be added later.
