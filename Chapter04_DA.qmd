@@ -1,0 +1,134 @@
+---
+title: "第4章"
+format: html
+editor: visual
+jupyter: python3
+---
+
+```{r}
+# 1. ライブラリの読み込み
+library(mlr3)
+library(mlr3learners)
+library(data.table)
+rating_data<-url('http://fs0.fbc.keio.ac.jp/~hayami/data/Rating_2022.RData')
+load(rating_data)
+
+# 2. データの準備
+# data.table形式に変換するとmlr3での処理が効率的になります
+x$rating <- as.factor(x$rating) # 目的変数をfactor型に
+x$DSP<-as.factor(x$DSP)
+x$DInd<-as.factor(x$DInd)
+
+# データの分割
+set.seed(123)
+split <- sample(1:nrow(x), size = 0.8 * nrow(x))
+train_data <- x[split, ]
+test_data <- x[-split, ]
+
+# 3. タスクの定義 (Task)
+# mlr3では、データと目的変数・説明変数の役割を「タスク」として定義します
+# tidymodelsのrecipeの役割の一部に相当します
+task <- as_task_classif(
+  train_data,
+  target = "rating",
+  id = "rating_classification"
+)
+
+# 使用する特徴量（説明変数）を選択
+# tidymodelsのformula (rating ~ PER + ...) に相当
+features <- c(
+  "PER", "PBR", "ROE", "ROA", "PCFR", "EVperEBIT", "ICR",
+  "SP02", "SP03", "SP04", "SP06", "SP07", "SP08", "SP09",
+  "SP10", "DSP", "DInd"
+)
+task$select(features)
+
+# 4. 学習器の定義 (Learner)
+# tidymodelsの set_engine("MASS") を持つ discrim_linear() に相当します
+learner <- lrn("classif.lda", predict_type = "response")
+
+# 5. モデルの学習 (Train)
+# tidymodelsの fit() に相当します
+learner$train(task)
+# 学習済みモデルは learner$model で確認できます
+
+# 6. 予測と評価 (Predict & Score)
+# --- 訓練データでの評価 ---
+print("Linear Discriminant Analysis")
+print("Training")
+# 予測の実行
+train_pred <- learner$predict_newdata(newdata = train_data)
+# 混同行列の表示
+print(train_pred$confusion)
+# 正解率(Accuracy)の計算と表示
+print(train_pred$score(msr("classif.acc")))
+
+# --- テストデータでの評価 ---
+print("Test")
+# 予測の実行
+test_pred <- learner$predict_newdata(newdata = test_data)
+# 混同行列の表示
+print(test_pred$confusion)
+# 正解率(Accuracy)の計算と表示
+print(test_pred$score(msr("classif.acc")))
+```
+
+```{r}
+library(tidymodels)
+library(discrim)
+library(purrr)
+
+# 予測と評価 (PredEst関数の役割)
+pred_eval <- function(model_fit, data) {
+  predictions <- predict(model_fit, new_data = data) %>%
+    bind_cols(data)
+  conf_matrix <- predictions %>%
+    conf_mat(truth = rating, estimate = .pred_class)
+  accuracy <- predictions %>%
+    metrics(truth = rating, estimate = .pred_class) %>%
+    filter(.metric == "accuracy")
+  print(conf_matrix)
+  print(accuracy)
+}
+
+# データの準備
+set.seed(123)
+data_split <- initial_split(x, prop = 0.8, strata = rating)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+# 線形判別分析の定義
+lda_spec <- discrim_linear() %>%
+  set_mode("classification") %>%
+  set_engine("MASS")
+
+# モデルの学習
+lda_fit <- lda_spec %>%
+  fit(rating ~ PER + PBR + ROE + ROA + PCFR + EVperEBIT + ICR + SP02 + SP03 + SP04 + SP06 + SP07 + SP08 + SP09 + SP10 + DSP + DInd,data = train_data)
+
+# 訓練データでの評価
+print("Linear Discriminant Analysis")
+print("Training")
+pred_eval(lda_fit, train_data)
+
+# テストデータでの評価
+print("Test")
+pred_eval(lda_fit, test_data)
+```
+
+```{r}
+bt_cls_spec <- 
+    boost_tree(trees = 15) |> 
+    set_mode("classification") |> 
+    set_engine("xgboost")
+
+xgb_fit <- bt_cls_spec |> fit(rating ~ PER + PBR + ROE + ROA + PCFR + EVperEBIT + ICR + SP02 + SP03 + SP04 + SP06 + SP07 + SP08 + SP09 + SP10 + DSP + DInd, data = train_data)
+xgb_fit
+
+print("Xgboost Analysis")
+print("Training")
+pred_eval(xgb_fit, train_data)
+print("Test")
+pred_eval(xgb_fit, test_data)
+
+```
