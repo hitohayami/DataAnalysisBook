@@ -1,0 +1,207 @@
+---
+title: "第2回出席(水2)"
+subtitle: "GISで遊ぶ"
+author: 
+  name: "名前"
+format: docx
+jupyter: python3
+---
+
+まず，名前を直すこと．提出するファイル名に名前や学籍番号はいらない．自動で付けられるため．"と"の間に名前を入れないとエラーになります． うまくいかなかったら，.qmdファイルのまま感想を書いて提出してください．
+
+## 感想を書いてください
+
+======= ここから．この下に書く．========
+
+例：また難しい課題かな．履修失敗かもね！
+
+履修していれば研究会・研究演習の担当教員は？
+
+======= ここまで．この下には書かない．========
+
+{{< pagebreak >}}
+
+## スライドの練習
+
+```{python}
+#| label: Heart
+import numpy as np
+import matplotlib.pyplot as plt
+
+theta = np.arange(-np.pi, np.pi, 0.0001*np.pi)
+x = np.cos(theta)
+y = np.cos(theta)**(2/3) + np.sin(theta)
+
+plt.plot(x, y, '-b', label='x=cos(theta)')
+plt.plot(-x, y, '-r', label='x=-cos(theta)')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.legend(loc='upper right')
+plt.show()
+```
+
+```{python}
+#| label: setup
+#| echo: FALSE
+import importlib
+import subprocess
+import sys
+
+# インストールしたいパッケージのリスト
+packages_to_install  = ["matplotlib","pandas","geopandas","numpy","requests","datetime"]
+
+def install_if_missing(package_name):
+  try:
+    importlib.import_module(package_name)
+    print(f"{package_name} は既にインストールされています。")
+  except ImportError:
+    print(f"{package_name} がインストールされていません。インストールを開始します...")
+    try:
+      subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+      print(f"{package_name} のインストールが完了しました。")
+    except subprocess.CalledProcessError as e:
+      print(f"{package_name} のインストール中にエラーが発生しました: {e}")
+
+# 各パッケージのインストール状況を確認し、必要であればインストール
+for package in packages_to_install:
+  install_if_missing(package)
+import datetime
+print(datetime.datetime.now())
+```
+
+## GIS(地図情報)の表示
+
+地図には，行政区画を利用することが多いので，まずは行政区画のシェープ・ファイルを国土地理院のサイトからダウンロードしてPythonに読み込ませる． そのための関数を定義する．
+
+```{python}
+#| label: Define procedures
+import os
+import shutil
+import requests
+from zipfile import ZipFile
+import geopandas as gpd
+import numpy as np
+
+def get_online_shape_file(this_url):
+    # Download and extract the shapefile
+    response = requests.get(this_url)
+    # Write tmp.zip
+    with open("tmp.zip", "wb") as f:
+        f.write(response.content)
+    # Extract to "tmp/L01-24_1X_GML"
+    with ZipFile("tmp.zip", "r") as zip_ref:
+        zip_ref.extractall("./tmp")
+    
+    # Find the shapefile
+    tmp_list = os.listdir("./tmp")
+    shp_file = [f"./tmp/{file}" for file in tmp_list if file.endswith(".shp")]
+    if not shp_file:
+        raise FileNotFoundError("Shapefile not found in the extracted directory.")
+    
+    # Read the shapefile using geopandas
+    sf_file = gpd.read_file(shp_file[0])
+    
+    # Clean up temporary files
+    shutil.rmtree("./tmp")
+    os.remove("tmp.zip")
+    
+    return sf_file
+
+def get_online_shape_land_price(this_url):
+    # Download and extract the shapefile
+    response = requests.get(this_url)
+    with open("tmp.zip", "wb") as f:
+        f.write(response.content)
+    shp_dir = this_url.split("/")[-1].split(".zip")[0]
+    with ZipFile("tmp.zip", "r") as zip_ref:
+        zip_ref.extractall("./tmp")
+    
+    # Find the shapefile
+    cur_region=this_url.split("/")[-1].split(".zip")[0]
+    tmp_list = os.listdir("./tmp/"+cur_region)
+    shp_file = [f"./tmp/{cur_region+"/"+file}" for file in tmp_list if file.endswith(".shp")]
+    if not shp_file:
+        raise FileNotFoundError("Shapefile not found in the extracted directory.")
+    
+    # Read the shapefile using geopandas
+    sf_file = gpd.read_file(shp_file[0])
+    
+    # Clean up temporary files
+    shutil.rmtree("./tmp")
+    os.remove("tmp.zip")
+    
+    return sf_file
+```
+
+## データをダウンロードして一都三県の必要な部分を切り取る
+
+国土地理院の行政区画のデータは，N03で2022年のデータである． 同様に公示価格のデータは，L01で2024年のデータとなる． 公示価格は，少なくとも10年以上のデータが一つのファイルで利用可能になっている． 合併などがあると，ゼロが入っているので注意が必要である．
+
+地図に表すときに小さくなってしまうので，東京の島嶼部をカットする． geopandasを利用している．
+
+土地の公示価格の対数を10段階に分けで，色分けして表示するための準備をする．
+
+```{python}
+#| label: Load GIS Data
+
+import pandas as pd
+# Download and process shapefiles for each region
+Saitama = get_online_shape_file("https://nlftp.mlit.go.jp/ksj/gml/data/N03/N03-2022/N03-20220101_11_GML.zip")
+Chiba = get_online_shape_file("https://nlftp.mlit.go.jp/ksj/gml/data/N03/N03-2022/N03-20220101_12_GML.zip")
+Tokyo = get_online_shape_file("https://nlftp.mlit.go.jp/ksj/gml/data/N03/N03-2022/N03-20220101_13_GML.zip")
+Kanagawa = get_online_shape_file("https://nlftp.mlit.go.jp/ksj/gml/data/N03/N03-2022/N03-20220101_14_GML.zip")
+lp_Saitama = get_online_shape_land_price("https://nlftp.mlit.go.jp/ksj/gml/data/L01/L01-24/L01-24_11_GML.zip")
+lp_Chiba = get_online_shape_land_price("https://nlftp.mlit.go.jp/ksj/gml/data/L01/L01-24/L01-24_12_GML.zip")
+lp_Tokyo = get_online_shape_land_price("https://nlftp.mlit.go.jp/ksj/gml/data/L01/L01-24/L01-24_13_GML.zip")
+lp_Kanagawa = get_online_shape_land_price("https://nlftp.mlit.go.jp/ksj/gml/data/L01/L01-24/L01-24_14_GML.zip")
+
+# Concatenate land price shapefiles for Kanto region
+lp_Kanto = gpd.GeoDataFrame(pd.concat([lp_Chiba, lp_Kanagawa, lp_Saitama, lp_Tokyo.iloc[:2585]]))
+
+# Calculate and categorize log land prices for each year
+land_price_2024 = pd.cut(np.log1p(lp_Kanto["L01_103"]), bins=10)
+land_price_2023 = pd.cut(np.log1p(lp_Kanto["L01_102"]), bins=10)
+land_price_2022 = pd.cut(np.log1p(lp_Kanto["L01_101"]), bins=10)
+land_price_2021 = pd.cut(np.log1p(lp_Kanto["L01_100"]), bins=10)
+land_price_2020 = pd.cut(np.log1p(lp_Kanto["L01_099"]), bins=10)
+land_price_2019 = pd.cut(np.log1p(lp_Kanto["L01_098"]), bins=10)
+land_price_2018 = pd.cut(np.log1p(lp_Kanto["L01_097"]), bins=10)
+land_price_2017 = pd.cut(np.log1p(lp_Kanto["L01_096"]), bins=10)
+land_price_2016 = pd.cut(np.log1p(lp_Kanto["L01_095"]), bins=10)
+land_price_2015 = pd.cut(np.log1p(lp_Kanto["L01_094"]), bins=10)
+land_price_2014 = pd.cut(np.log1p(lp_Kanto["L01_093"]), bins=10)
+```
+
+## 関東一都三県をまとめた地図データベースを作成する．
+
+まずは最新の価格データの対数を10分割した色付け地図を描く．
+
+```{python}
+#| label: Draw map
+
+import matplotlib.pyplot as plt
+# Concatenate shapefiles for Kanto region
+Kanto = gpd.GeoDataFrame(pd.concat([Chiba, Kanagawa, Saitama, Tokyo.iloc[2:153]]))
+
+# Plot Land Price Distribution
+ax = Kanto.plot(figsize=(10, 10), edgecolor='black', facecolor='none', alpha=0.5)
+ax.set_title("Land Price Distribution")
+lp_Kanto.plot(ax=ax, column=land_price_2024, cmap='coolwarm', markersize=5, legend=True)
+plt.show()
+```
+
+さらに，10年間の公示価格の上昇率を計算して, 図示している．
+
+```{python}
+#| label: Price Change
+
+# Calculate and categorize change rates of land prices for 2019-2024
+dland_price_2024 = np.log1p(lp_Kanto["L01_103"]) - np.log1p(lp_Kanto["L01_093"])
+dland_price = pd.cut(dland_price_2024, bins=10)
+
+# Plot Change Rate of Land Prices 2019-2024
+ax = Kanto.plot(figsize=(10, 10), edgecolor='black', facecolor='none', alpha=0.5)
+ax.set_title("Change Rate of Land Prices 2019-2024")
+lp_Kanto.plot(ax=ax, column=dland_price, cmap='coolwarm', markersize=5, legend=True)
+plt.show()
+```

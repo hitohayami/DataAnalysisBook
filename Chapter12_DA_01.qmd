@@ -1,0 +1,142 @@
+---
+title: "第2回出席(水2)"
+subtitle: "GISで遊ぶ"
+author: 
+  name: "名前"
+format: docx
+engine: knitr
+always_allow_html: true
+---
+
+まず，名前を直すこと．提出するファイル名に名前や学籍番号はいらない．自動で付けられるため．"と"の間に名前を入れないとエラーになります． うまくいかなかったら，.qmdファイルのまま感想を書いて提出してください．
+
+## 感想を書いてください
+
+======= ここから．この下に書く．========
+
+例：また難しい課題かな．履修失敗かもね！
+
+======= ここまで．この下には書かない．========
+
+{{< pagebreak >}}
+
+## GIS(地図情報)のシェープ・ファイルを使う
+
+```{r}
+#| label: setup
+#| echo: FALSE
+
+local({r<-getOption("repos"); r["CRAN"] <- "https://cloud.r-project.org"; options(repos=r)})
+lib_required=c("knitr","quarto","sf")
+id=lib_required %in% rownames(installed.packages())
+install.packages(lib_required[!id],dependencies=TRUE)
+for( pkg in lib_required ) library(pkg,character.only=T)
+Sys.setenv(TZ='Japan')
+op <- options(digits.secs = 6)
+Sys.time()
+```
+
+前回よりは簡単そうだったので載せます． sfというパッケージは，GDALというソフトウェアを呼び出して使っているはずなので，GDALをインストールしなければならないとか...あるかもしれません． いろいろなPC環境でやってみないとわからないことがあります．
+
+## 国土地理院のサイトから行政区画データと公示価格データを読み取る
+
+公示価格については，昨年と違うデータの保存仕方をしていて，関数を2種類用意している． ほぼ同じだが，解凍するときにフォルダができるように変わった． そのフォルダに含まれるファイル名を取得する必要がある．
+
+シェープ・ファイルだけ読み込むが，あとは削除する．
+
+### 準備のための関数の定義
+
+```{r Populations}
+tmp_dir=getwd()
+setwd(tmp_dir)
+
+get_online_shape_file<-function(this_url){
+  download.file(this_url,"tmp.zip")
+  tmp_dir=paste(getwd(),"/tmp",sep="")
+  unzip("tmp.zip",exdir=tmp_dir)
+  tmp_list<-dir("./tmp")
+  id=grep(".shp",tmp_list)
+  file_list=vector(length=length(tmp_list))
+  for( i in seq_along(tmp_list) ){
+    file_list[i]=paste("./tmp/",tmp_list[i],sep="")
+  }
+  shp_file=file_list[id]
+  sf_file=read_sf(shp_file)
+  file.remove(file_list)
+  unlink(tmp_dir, recursive = TRUE)
+  return(sf_file)
+ }
+
+get_online_shape_land_price<-function(this_url){
+  download.file(this_url,"tmp.zip")
+  shp_dir=strsplit(strsplit(this_url,".zip")[[1]],"/")[[1]][9]
+  tmp_dir=paste(getwd(),"/tmp",sep="")
+  unzip("tmp.zip",exdir=tmp_dir)
+  tmp_list<-dir(paste("./tmp",shp_dir,sep="/"))
+  id=grep(".shp",tmp_list)
+  file_list=vector(length=length(tmp_list))
+  for( i in seq_along(tmp_list) ){
+    file_list[i]=paste("./tmp",shp_dir,tmp_list[i],sep="/")
+  }
+  shp_file=file_list[id]
+  sf_file=read_sf(shp_file)
+  file.remove(file_list)
+  unlink(tmp_dir, recursive = TRUE)
+  return(sf_file)
+ }
+```
+
+### シェープ・ファイルの読み込み
+
+```{r read_shp_file, results='hide'}
+# 行政区域shape file
+Saitama <-get_online_shape_file("https://nlftp.mlit.go.jp/ksj/gml/data/N03/N03-2022/N03-20220101_11_GML.zip")
+Chiba   <-get_online_shape_file("https://nlftp.mlit.go.jp/ksj/gml/data/N03/N03-2022/N03-20220101_12_GML.zip")
+Tokyo   <-get_online_shape_file("https://nlftp.mlit.go.jp/ksj/gml/data/N03/N03-2022/N03-20220101_13_GML.zip")
+Kanagawa<-get_online_shape_file("https://nlftp.mlit.go.jp/ksj/gml/data/N03/N03-2022/N03-20220101_14_GML.zip")
+
+# 地価公示データ：都道府県別
+lp_Saitama <-get_online_shape_land_price("https://nlftp.mlit.go.jp/ksj/gml/data/L01/L01-24/L01-24_11_GML.zip")
+lp_Chiba   <-get_online_shape_land_price("https://nlftp.mlit.go.jp/ksj/gml/data/L01/L01-24/L01-24_12_GML.zip")
+lp_Tokyo   <-get_online_shape_land_price("https://nlftp.mlit.go.jp/ksj/gml/data/L01/L01-24/L01-24_13_GML.zip")
+lp_Kanagawa<-get_online_shape_land_price("https://nlftp.mlit.go.jp/ksj/gml/data/L01/L01-24/L01-24_14_GML.zip")
+```
+
+## 図を描く部分
+
+### 2024年の公示価格水準を10段階で描く
+
+公示価格のデータは10年以上の価格データが含まれている． その対数をとって，10段階で色付けする．
+
+東京の島嶼部は除くことにする． 一都三県と言われている部分だけを見ている． 東京でも奥多摩地域とかデータが少ないのでスカスカになる．
+
+```{r land_price}
+lp_Kanto<-do.call(rbind,list(lp_Chiba,lp_Kanagawa,lp_Saitama,lp_Tokyo[1:2585,]))
+# 年別の公示地価の対数を10段階で表す
+land_price_2024 <- cut(x = log1p(lp_Kanto$L01_103), breaks = 10)
+land_price_2023 <- cut(x = log1p(lp_Kanto$L01_102), breaks = 10)
+land_price_2022 <- cut(x = log1p(lp_Kanto$L01_101), breaks = 10)
+land_price_2021 <- cut(x = log1p(lp_Kanto$L01_100), breaks = 10)
+land_price_2020 <- cut(x = log1p(lp_Kanto$L01_099), breaks = 10)
+land_price_2019 <- cut(x = log1p(lp_Kanto$L01_098), breaks = 10)
+land_price_2018 <- cut(x = log1p(lp_Kanto$L01_097), breaks = 10)
+land_price_2017 <- cut(x = log1p(lp_Kanto$L01_096), breaks = 10)
+land_price_2016 <- cut(x = log1p(lp_Kanto$L01_095), breaks = 10)
+land_price_2015 <- cut(x = log1p(lp_Kanto$L01_094), breaks = 10)
+land_price_2014 <- cut(x = log1p(lp_Kanto$L01_093), breaks = 10)
+
+Kanto<-do.call(rbind,list(Chiba,Kanagawa,Saitama,Tokyo[2:153,]))
+
+plot(Kanto$geometry,sub="Land Price Distribution")
+plot(lp_Kanto$geometry,col=hcl.colors(n = 10, palette="Blue-Red 2")[land_price_2024], pch = 19, cex = .1,add=TRUE)
+
+```
+
+さらに，10年間の公示価格の上昇率を計算して, 図示している．
+
+```{r land_price_change}
+dland_price_2024=(log1p(lp_Kanto$L01_103)-log1p(lp_Kanto$L01_093))/5*100
+dland_price <- cut(x = dland_price_2024, breaks = 10)
+plot(Kanto$geometry,sub="Change Rate of Land Prices 2019-2024")
+plot(lp_Kanto$geometry,col=hcl.colors(n = 10, palette="Blue-Red 2")[dland_price], pch = 19, cex = .1,add=TRUE)
+```

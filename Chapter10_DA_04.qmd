@@ -1,0 +1,233 @@
+---
+title: "第10章 local fdr"
+author: "早見　均"
+format: docx
+editor: source
+---
+
+## 実行に必要な準備
+
+```{r}
+#| label: setup
+#| echo: FALSE
+local({r<-getOption("repos"); r["CRAN"] <- "https://cloud.r-project.org"; options(repos=r)})
+lib_required=c("knitr","rmarkdown","locfdr","stargazer")
+id=lib_required %in% rownames(installed.packages())
+install.packages(lib_required[!id],dependencies=TRUE)
+for( pkg in lib_required ) library(pkg,character.only=T)
+
+knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv(TZ='Japan')
+op <- options(digits.secs = 6)
+Sys.time()
+options(digits=4)
+```
+
+```{r LocalFDR_eq1537}
+data_file="https://web.stanford.edu/~hastie/CASI_files/DATA/prostz.txt"
+x=read.table(data_file,header=FALSE)
+x=unlist(x)
+
+# brks=seq(-4.5,5.4,0.15)
+# brks=seq(-4.5,5.4,0.18)
+brks=seq(-4.5,5.3,0.2)
+H=hist(x,breaks=brks,plot=FALSE)
+
+sum_density=sum(H$density)
+sum_counts=sum(H$counts)
+scale_x=sum_counts/sum_density
+
+# normal N(0,1) scaled by counts
+z=seq(-4.5,5.4,0.01)
+Z=data.frame(z=z)
+s=1
+phi=exp(-(z)**2/(2*s**2))/sqrt(2*pi*s**2)*scale_x
+
+# kernel density estimation
+fX_y=density(x)$y*scale_x
+fX_x=density(x)$x
+
+hist(x,breaks=brks,xlab="z-values",ylab="Counts",ylim=c(0,500),main="")
+lines(fX_x,fX_y,col=4,lwd=3)
+lines(z,phi,col=2,lwd=3)
+
+
+N=length(x)
+zi=sort(x,decreasing=TRUE)
+pv=1-pnorm(zi)
+
+iv=1:50
+
+alpha=0.1
+Holm=alpha/(N-iv+1)
+
+q=0.1
+FDR=(q/N)*iv
+
+plot(iv,pv[iv],cex=.3,col=4,pch=8,ylab="p-value",xlab="index i",main="")
+lines(iv,FDR,col=2)
+lines(iv,Holm,col=3)
+text(48,0.00073,"FDR",col=2)
+text(28,0.00038,"i=28",col=2)
+text(06,-0.00002,"i=6",col=2)
+
+print(length(which(abs(zi)<=2))/N)
+print(length(which(zi<=-3.40)))
+print(length(which(zi>=3.34)))
+
+fdr_N<-function(z,zi){
+ pizero=0.93
+ d=0.1
+ NZ=length(which((z-d/2)<=zi & zi<=(z+d/2)))
+ fdr=N*pizero*dnorm(z)*d/NZ
+ return(fdr)
+}
+
+z_zero=seq(-4.5,5.4,0.01)
+y=NULL
+for( i in 1:length(z_zero) ) {
+ y=append(y,fdr_N(z_zero[i],zi))
+}
+plot(z_zero,y,type="l",xlab="z-value",ylab="fdr (15.37)",main="")
+abline(h=0.2,col=2)
+text(0,0.23,"fdr=0.2")
+rug(x[abs(x)>2],col=5)
+# rug(jitter(x, amount = .1), side = 3, col = "light blue")
+```
+
+```{r Figure1505}
+brks=seq(-4.5,5.3,0.2)
+H=hist(x,breaks=brks,plot=FALSE)
+X=data.frame(density=H$density,x=H$mids,y=H$counts)
+dim(X)
+gx6=glm(y~poly(x,6),data=X,family="poisson")
+summary(gx6)
+gx5=glm(y~poly(x,5),data=X,family="poisson")
+summary(gx5)
+gx4=glm(y~poly(x,4),data=X,family="poisson")
+summary(gx4)
+gx3=glm(y~poly(x,3),data=X,family="poisson")
+summary(gx3)
+gx2=glm(y~poly(x,2),data=X,family="poisson")
+summary(gx2)
+
+library(stargazer)
+
+Table1501=matrix(c(c("2","3","4","5","6"),c(gx2$deviance,gx3$deviance,gx4$deviance,gx5$deviance,gx6$deviance)),nrow=5,ncol=2)
+Table1501=t(Table1501)
+rownames(Table1501)=c("Degree","Deviance")
+stargazer(Table1501)
+
+fh=predict(gx4,X)
+fh_c=exp(fh)
+s_fd=sum(fh_c)
+max(fh)
+min(fh)
+
+phi=dnorm(X$x,sd=1)
+s_phi=sum(phi)
+phi=phi*s_fd/s_phi
+
+plot(X$x,H$counts,xlab="z-value",ylab="Counts, and its estimates",ylim=c(0,500))
+lines(X$x,fh_c,col=4)
+lines(X$x,phi,col=2)
+
+pi0=0.9
+
+# Fdr
+z=sort(x)
+
+N_z0=NULL
+S0_z0=NULL
+for( i in 1:length(z)){
+  N_z0=append(N_z0,sum(z>=z[i]))
+  S0_z0=append(S0_z0,1-pnorm(z[i]))
+}
+Sh_z0=N_z0/length(z)
+
+Na_z0=NULL
+Sa0_z0=NULL
+for( i in 1:length(z)){
+  Na_z0=append(Na_z0,sum(z<=z[i]))
+  Sa0_z0=append(Sa0_z0,pnorm(z[i]))
+}
+Sah_z0=Na_z0/length(z)
+
+Fdr_h=pi0*S0_z0/Sh_z0
+Fdra_h=pi0*Sa0_z0/Sah_z0
+
+# Local false discovery rate
+
+ldr=pi0*phi/fh_c
+plot(X$x,ldr,type="l",ylim=c(0,1),ylab="fdr and Fdr",xlab="z-value")
+abline(h=0.2,col=2,lty=2)
+abline(h=0,col=4,lty=3)
+abline(v=0,col=4,lty=2)
+abline(v=0,col=4,lty=2)
+abline(v=0,col=4,lty=2)
+lines(x=c(3.34,3.34),y=c(0,0.2),col=4,lty=2)
+lines(x=c(-3.4,-3.4),y=c(0,0.2),col=4,lty=2)
+lines(z,Fdr_h,type="l",col=4)
+lines(z,Fdra_h,col=2)
+
+rug(x[x>=3.34],col=5)
+rug(x[x<=-3.40],col=5)
+text(0,0.24,"fdr=0.2")
+text(3.5,0.7,"local fdr")
+# rug(jitter(x, amount = .1), side = 3, col = "light blue")
+```
+
+```{r fig1507}
+X_police=read.table("https://web.stanford.edu/~hastie/CASI_files/DATA/police.txt",header=FALSE)
+X_police=unlist(X_police)
+H_police=hist(X_police,xlab="z-values",ylab="Frequency",nclass=100,main="",ylim=c(0,200))
+N_police=length(X_police)
+mean(X_police)
+sd(X_police)
+
+f_N01=dnorm(H_police$mids)
+s_N01=sum(f_N01)
+s_Xpolice=sum(H_police$counts)
+f_N01=f_N01/s_N01*s_Xpolice
+lines(H_police$mids,f_N01,lty=3)
+
+f_Nem=dnorm(H_police$mids,mean=mean(X_police),sd=sd(X_police))
+s_Nem=sum(f_Nem)
+f_Nem=f_Nem/s_Nem*s_Xpolice
+
+lines(H_police$mids,f_Nem,col=2)
+```
+
+```{r fig1508}
+Z_police=sort(X_police)
+qqnorm(Z_police,main="",xlab="Normal Quantiles",cex=0.3)
+qqline(Z_police,lty=3,col=2)
+```
+
+```{r fig1509}
+library(locfdr)
+x_DTI=read.csv("https://web.stanford.edu/~hastie/CASI_files/DATA/DTI.csv")
+w=locfdr(x_DTI$Zscore)
+w$fp0
+```
+
+```{r fig1510}
+idZsc=which(x_DTI$Zscore>3.07)
+idFDR=which(w$fdr<=0.2)
+plot(x_DTI$x,x_DTI$Zscore,cex=0.1,xlab="Distance x",ylab="Z scores",main="")
+points(x_DTI$x[idFDR],x_DTI$Zscore[idFDR],cex=0.3,pch=8,col=6)
+abline(h=3.07,lty=3,col=4)
+i_min=min(x_DTI$x)
+i_max=max(x_DTI$x)
+Med=NULL; Pile16=NULL; Pile84=NULL
+for( i in i_min:i_max ){
+  id_x=which(x_DTI$x==i)
+  Qtile=quantile(x_DTI$Zscore[id_x], probs = c(0.16, 0.5, 0.84))
+  Med=append(Med,Qtile[2])
+  Pile16=append(Pile16,Qtile[1])
+  Pile84=append(Pile84,Qtile[3])
+}
+lines(i_min:i_max,Med,col=3,lwd=2)
+lines(i_min:i_max,Pile16,col=8,lwd=2,lty=3)
+lines(i_min:i_max,Pile84,col=8,lwd=2,lty=3)
+```

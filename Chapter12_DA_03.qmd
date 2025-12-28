@@ -1,0 +1,270 @@
+---
+title: "第11回出席(水2)"
+subtitle: "Shrinkage Estimation"
+author: "名前"
+format: docx
+editor: visual
+engine: knitr
+always_allow_html: true
+---
+
+## 感想ですかね
+
+======= ここから．この下に書く．========
+
+======= ここまで．この下には書かない．========
+
+{{<pagebreak>}}
+
+## 実行に必要な準備
+
+```{r}
+#| label: setup
+#| echo: FALSE
+local({r<-getOption("repos"); r["CRAN"] <- "https://cloud.r-project.org"; options(repos=r)})
+lib_required=c("knitr","rmarkdown","quantmod","shrinkTVP","quarto","tidyquant","dplyr","MASS","lmtest")
+id=lib_required %in% rownames(installed.packages())
+install.packages(lib_required[!id],dependencies=TRUE)
+for( pkg in lib_required ) library(pkg,character.only=T)
+knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv(TZ='Japan')
+op <- options(digits.secs = 6)
+Sys.time()
+options(digits=3)
+
+local({r<-getOption("repos"); r["CRAN"] <- "https://cloud.r-project.org"; options(repos=r)})
+id=lib_required %in% rownames(installed.packages())
+install.packages(lib_required[!id],dependencies=TRUE)
+for( pkg in lib_required ) library(pkg,character.only=T)
+Sys.setenv(R_LIBCURL_SSL_REVOKE_BEST_EFFORT=TRUE) 
+Sys.setenv(TZ='Japan')
+
+knitr::opts_chunk$set(echo = TRUE)
+options(digits=4)
+
+```
+
+# 当てはまるかなぁ
+
+-   とりあえず，金融データで引っ張ってこれるのがquantmodというパッケージ．
+
+-   無理に，縮小推定の例をもってくるけど，パラメター時変モデルで，MCMC使ってベイジアン推定もなさる流行りもののパッケージ．
+
+ということで，とりあえず過去3日間のデータで現在のデータを予測するという自己回帰モデルでやってみる．quantmodのトレードの結果はちょっとおかしい． 最終的なグラフは，予測したところがシェード付きのグラフになっている．
+
+## 
+
+```{r QuantMod_2023}
+# ここは時間がかかるので，一つで十分だけど…
+#
+# getSymbols("7203.T",src='yahooj') # トヨタ自動車
+# getSymbols("9984.T",src='yahooj') # ソフトバンクグループ
+getSymbols("4661.T",src='yahooj') # オリエンタルランド
+# getFX("USD/JPY") # 為替対ドル円レート
+```
+
+```{r Simple_Graph}
+# chartSeries(YJ7203.T,TA=c(addVo(),addBBands()))
+# chartSeries(YJ9984.T,TA=c(addVo(),addBBands()))
+chartSeries(YJ4661.T,TA=c(addVo(),addBBands()))
+# chartSeries(USDJPY,TA=c(addBBands()))
+```
+
+```{r shrinkageTimeVaryingParameter}
+DisneyJ=specifyModel(Next(OpCl(YJ4661.T)) ~ Lag(OpHi(YJ4661.T),0:3))
+m.DisneyJ=buildModel(DisneyJ,method='lm',training.per=c('2007-01-01','2023-05-31'))
+summary(m.DisneyJ)
+(t.DisneyJ=tradeModel(m.DisneyJ))
+
+plot(monthlyReturn(YJ4661.T))
+
+############### オリエンタル・ランドの株価 ###############
+SP_OLand=data.frame(OpCl(YJ4661.T),OpHi(YJ4661.T))
+colnames(SP_OLand)=c("ClPrice","HiPrice")
+n=length(SP_OLand$ClPrice)
+n_L1=n-1; n_L2=n-2; n_L3=n-3
+n_T=3000; n_T1=n_T-1; n_T2=n_T-2 ; n_T3=n_T-3
+OLand_train=data.frame(cbind(SP_OLand$HiPrice[1:n_T3],SP_OLand$HiPrice[2:n_T2],SP_OLand$HiPrice[3:n_T1],SP_OLand$ClPrice[4:n_T]))
+colnames(OLand_train)=c("SP_L3","SP_L2","SP_L1","SP")
+
+OLand_test=data.frame(cbind(SP_OLand$HiPrice[2997:n_L3],SP_OLand$HiPrice[2998:n_L2],SP_OLand$HiPrice[2999:n_L1],SP_OLand$ClPrice[3000:n]))
+colnames(OLand_test)=c("SP_L3","SP_L2","SP_L1","SP")
+
+# ここもかなり時間がかかる
+ShrinkTVP_OL <- shrinkTVP(SP ~ SP_L1 + SP_L2+ SP_L3, data = OLand_train, sv=TRUE)
+summary(ShrinkTVP_OL)
+plot(ShrinkTVP_OL)
+
+ShrinkTVP_OL_Forcast=forecast_shrinkTVP(ShrinkTVP_OL, OLand_test)
+plot(ShrinkTVP_OL_Forcast)
+
+```
+
+```{r}
+#| label: Regression_influence.measures
+stocks_data=YJ4661.T
+YJ_mat=as.matrix(stocks_data,col=6)
+x_time=time(stocks_data)
+Max_T=dim(x_time)[1]
+rm(YJ_mat)
+
+y=Hi(stocks_data)
+dy=na.contiguous(diff(y,lag=1))
+
+v=lags(log(Vo(stocks_data)),n=1)
+lag_v=na.contiguous(v[,2])
+
+x=data.frame(dy=as.vector(dy),lag_v=as.vector(lag_v))
+hist(x$dy,nclass=50,main="",xlab="Change Rate of Stock Price")
+Sys.time()
+
+qqnorm(x$dy,main="Normal QQ plot",sub="Check if the change rate is normallu distributed")
+qqline(x$dy,col="red")
+
+TokyoDisney_P=lm(dy~lag_v,x)
+summary(TokyoDisney_P)
+TkyDis_ifm=influence.measures(TokyoDisney_P)
+
+res=TokyoDisney_P$residuals
+plot(res,cex=0.3)
+
+plot(x$lag_v,x$dy,cex=0.3,xlab="log Volume",ylab="dlog Stock Price",sub="Tokyo Disney Land",main="")
+abline(TokyoDisney_P,col="green")
+points(x[TkyDis_ifm$is.inf[,4],2],x[TkyDis_ifm$is.inf[,4],1],col="yellow",pch=21)
+points(x[TkyDis_ifm$is.inf[,6],2],x[TkyDis_ifm$is.inf[,6],1],col="orange",pch=0)
+points(x[TkyDis_ifm$is.inf[,5],2],x[TkyDis_ifm$is.inf[,5],1],col="purple",pch=16)
+
+# Excluding outliers 1
+x_1=x[!TkyDis_ifm$is.inf[,4],]
+x_time1=x_time[!TkyDis_ifm$is.inf[,4]]
+hist(x_1$dy,nclass=50,main="Normal QQ plot",xlab="Change Rate of Stock Price")
+
+qqnorm(x_1$dy,main="",sub="Check if the change rate is normallu distributed")
+qqline(x_1$dy,col="red")
+
+TokyoDisney_P1=lm(dy~lag_v,x_1)
+summary(TokyoDisney_P1)
+TkyDis_ifm1=influence.measures(TokyoDisney_P1)
+
+res=TokyoDisney_P1$residuals
+qqnorm(res,main="",sub="Check if the residual is normallu distributed")
+qqline(res,col="red")
+
+plot(x_1$lag_v,x_1$dy,cex=0.3,xlab="log Volume",ylab="dlog Stock Price",sub="Tokyo Disney Land",main="")
+abline(TokyoDisney_P1,col="darkblue")
+abline(TokyoDisney_P,col="red")
+points(x[TkyDis_ifm$is.inf[,4],2],x[TkyDis_ifm$is.inf[,4],1],col="yellow",pch=21)
+points(x[TkyDis_ifm$is.inf[,6],2],x[TkyDis_ifm$is.inf[,6],1],col="orange",pch=0)
+
+# Excluding outliers 2
+x_2=x_1[!TkyDis_ifm1$is.inf[,6],]
+x_time2=x_time1[!TkyDis_ifm1$is.inf[,6]]
+hist(x_2$dy,nclass=50,main="Normal QQ plot",xlab="Change Rate of Stock Price")
+
+qqnorm(x_2$dy,main="",sub="Check if the change rate is normallu distributed")
+qqline(x_2$dy,col="red")
+
+TokyoDisney_P2=lm(dy~lag_v,x_2)
+summary(TokyoDisney_P2)
+TkyDis_ifm2=influence.measures(TokyoDisney_P2)
+
+res=TokyoDisney_P2$residuals
+qqnorm(res,main="",sub="Check if the residual is normallu distributed")
+qqline(res,col="red")
+
+plot(x_2$lag_v,x_2$dy,cex=0.3,xlab="log Volume",ylab="dlog Stock Price",sub="Tokyo Disney Land",main="")
+abline(TokyoDisney_P2,col="darkorange")
+abline(TokyoDisney_P,col="red")
+points(x[TkyDis_ifm$is.inf[,4],2],x[TkyDis_ifm$is.inf[,4],1],col="yellow",pch=21)
+```
+
+## Robust regression: M-estimators
+
+```{r Robust_regression}
+TokyoDisney_huber=rlm(dy~lag_v,data=x,psi = psi.huber)
+coeftest(TokyoDisney_huber)
+
+TokyoDisney_hamp=rlm(dy~lag_v,data=x,psi = psi.hampel)
+coeftest(TokyoDisney_hamp)
+
+TokyoDisney_bisq=rlm(dy~lag_v,data=x,psi = psi.bisquare)
+coeftest(TokyoDisney_bisq)
+
+TokyoDisney_huber=rlm(dy~lag_v,data=x_2,psi = psi.huber)
+coeftest(TokyoDisney_huber)
+
+TokyoDisney_hamp=rlm(dy~lag_v,data=x_2,psi = psi.hampel)
+coeftest(TokyoDisney_hamp)
+
+TokyoDisney_bisq=rlm(dy~lag_v,data=x_2,psi = psi.bisquare)
+coeftest(TokyoDisney_bisq)
+```
+
+ロバスト回帰の結果でも，データでアウトライアーを少なくしたものと，そのままのデータでは結果が異なっている．
+
+```{r Check_outliers}
+plot(x_time[2:n],x$dy,cex=0.3,xlab="",ylab="dlog Stock Price",sub="Tokyo Disney Land",main="")
+points(x_time[TkyDis_ifm$is.inf[,4]],x[TkyDis_ifm$is.inf[,4],1],col="red")
+n2=length(x_time2)
+plot(x_time2[2:n2],x_2$dy,cex=0.3,xlab="",ylab="dlog Stock Price",sub="Tokyo Disney Land",main="")
+points(x_time2[TkyDis_ifm$is.inf[,6]],x_2[TkyDis_ifm$is.inf[,6],1],col="purple",pch=0)
+```
+
+# Fama French 3 factor model
+
+Kenneth R. French教授のダートマス大学のサイトからデータを取得する．
+
+```{r Fama_French_3factors}
+tmp <- tempfile()
+download.file("https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/Japan_3_Factors_Daily_CSV.zip",tmp)
+
+FF3_Japan <- read.csv(unzip(tmp), skip=6)
+
+year=as.integer(FF3_Japan$X/10000)
+mons=as.integer(FF3_Japan$X/100)-year*100
+dats=as.integer(FF3_Japan$X)-year*10000-mons*100
+ff3_date=sprintf("%4d-%02d-%02d",year,mons,dats)
+ff3_date=as.Date(ff3_date)
+id_time=match(x_time,ff3_date)
+bgn_T=which(id_time==min(id_time,na.rm=TRUE))
+end_T=which(id_time==max(id_time,na.rm=TRUE))
+ff3=FF3_Japan[id_time,]
+x_ff3=data.frame(Date=ff3[2:n,1],x,ff3[2:n,2:5])
+id_na=which(is.na(x_ff3))
+x_ff3_est=na.contiguous(x_ff3)
+unlink(tmp);rm(tmp)
+rm(year,mons,dats,id_time)
+
+ff3_japan=lm(I(dy-RF)~Mkt.RF+SMB+HML,data=x_ff3_est)
+summary(ff3_japan)
+ff3_ifm=influence.measures(ff3_japan)
+
+x_time_est=x_time[-id_na]
+n3=length(x_time_est)
+dy_est=x$dy[-id_na]
+bgn_T=2
+plot(x_time_est[2:n3],dy_est,cex=0.3,xlab="",ylab="dlog Stock Price",sub="Tokyo Disney Land",main="")
+lines(x_time_est[bgn_T:end_T],predict(ff3_japan),col="red")
+points(x_time_est[ff3_ifm$is.inf[,4]],x_ff3_est$dy[ff3_ifm$is.inf[,4]],col="yellow",pch=21)
+points(x_time_est[ff3_ifm$is.inf[,5]],x_ff3_est$dy[ff3_ifm$is.inf[,5]],col="purple",pch=16)
+points(x_time_est[ff3_ifm$is.inf[,6]],x_ff3_est$dy[ff3_ifm$is.inf[,6]],col="orange",pch=0)
+
+# Excluding outliers 1
+x_ff3_est1=x_ff3_est[!ff3_ifm$is.inf[,5],]
+x_ff3_time1=x_time[bgn_T:end_T]
+x_ff3_time1=x_ff3_time1[!ff3_ifm$is.inf[,5]]
+
+ff3_japan_P1=lm(I(dy-RF)~Mkt.RF+SMB+HML,data=x_ff3_est1)
+summary(ff3_japan_P1)
+ff3_ifm1=influence.measures(ff3_japan_P1)
+
+plot(x_ff3_time1,x_ff3_est1$dy,cex=0.3,xlab="",ylab="dlog Stock Price",sub="Oriental Land",main="")
+lines(x_ff3_time1,predict(ff3_japan_P1),col="red")
+points(x_ff3_time1[ff3_ifm1$is.inf[,4]],x_ff3_est1$dy[ff3_ifm1$is.inf[,4]],col="yellow",pch=21)
+points(x_ff3_time1[ff3_ifm1$is.inf[,5]],x_ff3_est1$dy[ff3_ifm1$is.inf[,5]],col="purple",pch=16)
+points(x_ff3_time1[ff3_ifm1$is.inf[,6]],x_ff3_est1$dy[ff3_ifm1$is.inf[,6]],col="orange",pch=0)
+
+res=residuals(ff3_japan_P1)
+qqnorm(res,main="",sub="Check if the residual is normallu distributed")
+qqline(res,col="red")
+```

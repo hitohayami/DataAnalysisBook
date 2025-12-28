@@ -94,3 +94,88 @@ plot(res$psi)
 rv <- measure(y, 3, rep=10000)$value
 hist(rv, freq=FALSE, main="Probability for Qubit 3")
 ```
+
+### 量子フーリエ変換
+
+```{r QFT}
+y <- qstate(3)
+y <- qft(y, inverse=FALSE)
+plot(y)
+y <- qstate(4)
+y <- qft(y, inverse=FALSE)
+plot(y)
+
+cnotwrapper <- function(c, j, x, k) {
+  if(j == 1) return(CNOT(c(c, k)) * x)
+  return(Id(k) * x)
+}
+
+x <- H(1) * qstate(3)
+x <- phase_estimation(bitmask=c(2:3), FUN=cnotwrapper, x=x, k=1)
+x
+plot(x)
+
+x <- H(1) * (X(1) * qstate(3))
+x <- phase_estimation(bitmask=c(2:3), FUN=cnotwrapper, x=x, k=1)
+x
+plot(x)
+```
+
+### Groverのアルゴリズム
+
+```{r Grover}
+## oracle for n=2 and x_s=2
+oracle <- function(x) {
+  x <- X(1) * (CCNOT(c(1,2,3)) *(X(1) * x))
+  return(x)
+}
+
+## case |00>=0
+x <- oracle(qstate(3))
+measure(x, 3)$value
+plot(x)
+
+## case |01>=1
+x <- oracle(X(1)*qstate(3))
+measure(x, 3)$value
+plot(x)
+
+## case |10>=2
+x <- oracle(X(2)*qstate(3))
+measure(x, 3)$value
+plot(x)
+
+## case |11>=3
+x <- oracle(X(2)*(X(1)*qstate(3)))
+measure(x, 3)$value
+plot(x)
+
+U <- function(x) {
+  x <- oracle(x)
+  x <- Z(3) * x
+  x <- oracle(x)
+  return(x)
+}
+V <- function(x) {
+  for(i in c(1:2)) {
+    x <- H(i) * x
+  }
+  x <- X(1) * (X(2) * x)
+  x <- CCNOT(c(1,2,3)) * x
+  x <- Z(3) * x
+  x <- CCNOT(c(1,2,3)) * x
+  x <- X(1) * (X(2) * x)
+  for(i in c(1:2)) {
+    x <- H(i) * x
+  }
+  return(x)
+}
+## prepare psi
+psi <- H(1) * ( H(2) * qstate(3))
+## apply VU
+x <- U(psi)
+plot(x)
+x <- V(x)
+x
+plot(x)
+```

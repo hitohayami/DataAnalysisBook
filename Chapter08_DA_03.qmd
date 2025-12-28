@@ -1,0 +1,297 @@
+---
+title: "第10回出席 (水2)"
+subtitle: "AI(深層学習)によるfashion mnist画像識別: CNN/MLP"
+author: "ここは自分の名前に変える"
+format: docx
+jupyter: python3
+editor: source
+always_allow_html: true
+---
+
+## 感想
+
+===感想を次の行から書く=================================
+
+上から4行目の"　"の中は自分の名前に書き換えること！漢字OKです。
+
+===この下には書かない===================================
+
+## 準備
+
+1.  古いPythonのバージョンがある場合は削除しておくか，自己責任でpyenvなどの環境を整える必要がある．
+
+2.  Python 3.12.10〜12をインストールする
+
+    anacondaを使っている人は自己責任でconda仮想環境を整備する
+
+3.  pipないしはpip3でkeras, jax, jupyter, matplotlibをインストールする
+
+    pip3 install keras jax jupyter matplotlib
+
+4. VS Codeの場合は，Pythonのみを使うので, 7. へ
+
+5.  RStudioを開く．Packagesのupgrade allをしておく
+
+6.  RStudioのTools -\> Global Options... -\> Python -\> Select Mac OS の場合 /usr/local/bin/python3 selectをクリック -\> 画面が戻る Apply をクリック -\> Ok をクリック -\> 画面が戻る Restarting R session と窓が出る． Yesと答える．
+
+7.  実行にはパソコンの性能によって，20分かそれ以上かかる場合がある．私のMac M2の場合，1 epocに100秒くらいかかって，20 epocでラーニングするので25分はかかった．最後にテストして終わる．
+
+## keras によるMNIST
+
+```{python}
+#| label: 念のためkears3 と jax の アップグレード・インストール
+#| message: false
+#| include: false
+# tensorflowはpython 3.13.1以降未対応
+! pip3 install --upgrade keras jax jupyter matplotlib --quiet
+```
+
+## Kerasからfashon MNISTのデータのダウンロードとデータの分割
+
+```{python}
+#| label: データの準備
+import numpy as np
+import os
+
+os.environ["KERAS_BACKEND"] = "jax"
+
+import keras
+
+print(keras.__version__)
+
+# Load the data and split it between train and test sets
+(x_train, y_train), (x_test, y_test) = keras.datasets.fashion_mnist.load_data()
+
+# Scale images to the [0, 1] range
+x_train = x_train.astype("float32") / 255
+x_test = x_test.astype("float32") / 255
+# Make sure images have shape (28, 28, 1)
+x_train = np.expand_dims(x_train, -1)
+x_test = np.expand_dims(x_test, -1)
+print("x_train shape:", x_train.shape)
+print("y_train shape:", y_train.shape)
+print(x_train.shape[0], "train samples")
+print(x_test.shape[0], "test samples")
+```
+
+## 最初はMLPを設定する
+
+活性化関数はReLUで最終的にはsoftmaxである．
+
+```{python}
+#| label: MLPモデルの設定
+model_MLP = keras.models.Sequential([
+    keras.Input(shape=(28, 28)),
+    keras.layers.Flatten(),
+    keras.layers.Dense(300, activation="relu"),
+    keras.layers.Dense(100, activation="relu"),
+    keras.layers.Dense(10, activation="softmax")
+])
+
+model_MLP.summary()
+```
+
+モデルのコンパイルとfitting．
+
+```{python}
+#| label: MLPモデルのコンパイルと当てはめ
+batch_size = 128
+
+model_MLP.compile(loss="sparse_categorical_crossentropy",
+                  optimizer="sgd",
+                  metrics=["accuracy"])
+callbacks = [
+  keras.callbacks.ModelCheckpoint(filepath="model_at_epoch_{epoch}.keras"),
+  keras.callbacks.EarlyStopping(monitor="val_loss", patience=2),
+]
+
+hist_MLP=model_MLP.fit(x_train,y_train, epochs=30,
+        batch_size=batch_size,
+        validation_split=0.15,
+        callbacks=callbacks,
+    )
+score_MLP = model_MLP.evaluate(x_test, y_test, verbose=0)
+model_MLP.save("fashion_mnist_MLP.keras")
+np.save('fashion_mnist_MLP_hist.npy',hist_MLP.history)
+```
+
+```{python}
+#| label: MLPモデルの学習過程の表示
+
+import matplotlib.pyplot as plt
+
+if os.path.exists('fashion_mnist_MLP_hist.npy') : 
+   myhistory = np.load('fashion_mnist_MLP_hist.npy',allow_pickle='TRUE').item()
+   loss=myhistory['loss']
+   val_loss=myhistory['val_loss']
+else:
+   loss = hist.history['loss']
+   val_loss = hist.history['val_loss']
+
+plt.close()
+m_loss=len(loss)
+m_val=len(val_loss)
+# lossのグラフ
+xtmp=plt.plot(range(m_loss), loss, marker='.', label='loss')
+xtmp=plt.plot(range(m_val), val_loss, marker='.', label='val_loss')
+xtmp=plt.legend(loc='best', fontsize=10)
+xtmp=plt.grid()
+xtmp=plt.xlabel('epoch')
+xtmp=plt.ylabel('loss')
+xtmp=plt.title('Two hidden layers MLP')
+plt.show()
+```
+
+```{python}
+#| label: MLPモデルの予測 test
+os.getcwd()
+model_MLP = keras.saving.load_model("fashion_mnist_MLP.keras")
+
+predictions = model_MLP.predict(x_test)
+
+n=len(y_test)
+s=0
+for i in range(n) :
+  y_est=predictions[i].argmax()
+  if y_test[i]==y_est :
+    s+=1
+print("正解率{0}%".format(s/n*100))
+```
+
+## CNN-Modelのコンパイル (compile)と推定(fit)
+
+結構，時間がかかる． 画面下方にaccで正解率が表示される． 最初のEpochで0.5523程度の当てはまりで，val_acc=0.9648となる． Epoch2ではいきなり0.92になる．val_acc=0.9757である．
+
+epoch=20にしようかと思ったが，実行時間が70分を超えるとやってられないので，10回にした．
+
+この部分は時間がかかるので，一度実行すると，final_model_01.kerasというファイルができるので，これがあれば，省略できる．
+
+```{python}
+#| label: CNN Model parametersの表示
+num_classes = 10
+input_shape = (28, 28, 1)
+
+model = keras.Sequential(
+    [
+        keras.layers.Input(shape=input_shape),
+        keras.layers.Conv2D(64, kernel_size=(3, 3), activation="relu"),
+        keras.layers.Conv2D(64, kernel_size=(3, 3), activation="relu"),
+        keras.layers.MaxPooling2D(pool_size=(2, 2)),
+        keras.layers.Conv2D(128, kernel_size=(3, 3), activation="relu"),
+        keras.layers.Conv2D(128, kernel_size=(3, 3), activation="relu"),
+        keras.layers.GlobalAveragePooling2D(),
+        keras.layers.Dropout(0.5),
+        keras.layers.Dense(num_classes, activation="softmax"),
+    ]
+)
+
+model.summary()
+```
+
+```{python}
+#| label: epochs=20 MacのM2で25分くらい，Windows Xeon(古い) 70分はかかる
+#| message: false
+#| warning: false
+if (not os.path.exists("fashion_mnist_01.keras")) :
+    model.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(),
+        optimizer=keras.optimizers.Adam(learning_rate=1e-3),
+        metrics=[
+            keras.metrics.SparseCategoricalAccuracy(name="acc"),
+        ],
+    )
+
+    batch_size = 128
+    epochs = 10
+
+    callbacks = [
+        keras.callbacks.ModelCheckpoint(filepath="model_at_epoch_{epoch}.keras"),
+        keras.callbacks.EarlyStopping(monitor="val_loss", patience=2),
+    ]
+
+    hist=model.fit(
+        x_train,
+        y_train,
+        batch_size=batch_size,
+        epochs=epochs,
+        validation_split=0.15,
+        callbacks=callbacks,
+    )
+    score = model.evaluate(x_test, y_test, verbose=0)
+
+    model.save("fashion_mnist_01.keras")
+    np.save('fashion_mnist_01_hist.npy',hist.history)
+else:
+    print("Use the previous final model. No new estimate obtained.")
+```
+
+```{python}
+#| label: CNN-モデルの予測 test
+os.getcwd()
+model = keras.saving.load_model("fashion_mnist_01.keras")
+
+predictions = model.predict(x_test)
+
+n=len(y_test)
+s=0
+for i in range(n) :
+  y_est=predictions[i].argmax()
+  if y_test[i]==y_est :
+    s+=1
+print("正解率{0}%".format(s/n*100))
+```
+
+```{python}
+#| label: CNN-学習プロセスの表示
+import matplotlib.pyplot as plt
+
+plt.close()
+if os.path.exists('fashion_mnist_01_hist.npy') : 
+   myhistory = np.load('fashion_mnist_01_hist.npy',allow_pickle='TRUE').item()
+   loss=myhistory['loss']
+   val_loss=myhistory['val_loss']
+else:
+   loss = hist.history['loss']
+   val_loss = hist.history['val_loss']
+
+m_loss=len(loss)
+m_val=len(val_loss)
+# lossのグラフ
+xtmp=plt.plot(range(m_loss), loss, marker='.', label='loss')
+xtmp=plt.plot(range(m_val), val_loss, marker='.', label='val_loss')
+xtmp=plt.legend(loc='best', fontsize=10)
+xtmp=plt.grid()
+xtmp=plt.xlabel('epoch')
+xtmp=plt.ylabel('loss')
+xtmp=plt.title('Four hidden layers with two pooling, CNN')
+plt.show()
+```
+
+```{python}
+#| label: CNN結果の例示
+plt.close()
+
+W = 16  # 横に並べる個数
+H = 8   # 縦に並べる個数
+
+class_names=["Top","Trouser","Pullover","Dress","Coat","Snadal","Shirt","Sneaker","Bag","Ankle_boot"]
+
+fig = plt.figure(figsize=(H, W))
+fig.subplots_adjust(left=0, right=1, bottom=0.05, top=1, hspace=1.1, wspace=0.05)
+
+for i in range(W*H):
+  i_max=predictions[i].argmax()
+  pred=class_names[i_max]
+  tmp="{0}".format(pred)
+  ax = fig.add_subplot(H, W, i + 1, xticks=[], yticks=[])
+  xtmp=ax.imshow(x_test[i].reshape((28, 28)), cmap='gray')
+  xtmp=ax.set_xlabel(tmp,fontsize=6)
+
+plt.show()
+```
+
+### 参考文献
+
+Géron, Aurélien (2022) **Hands-On Machine Learning with Scikit-Learn, Keras, and Tensorflow**, 3rd ed., O'Reilly.
+
+Keras 3 (2023) https://keras.io/examples/vision/mnist_convnet/ (2024/12/14)

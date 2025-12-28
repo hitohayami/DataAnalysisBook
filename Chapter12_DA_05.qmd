@@ -1,0 +1,109 @@
+---
+title: "第12章"
+format: docx
+editor: visual
+---
+
+## R Stan and POS data
+
+```{r}
+pos_file=url('https://raw.github.com/hitohayami/DataAnalysisBook/main/TokyoOsaka_2023.csv')
+x=read.csv(pos_file)
+
+plot(log(x$数量),log(x$平均価格),cex=0.2,xlab="q",ylab="p")
+
+summary(x)
+```
+
+```{r}
+plot(log(x$数量),log(x$平均価格),col=factor(x$地区コード),cex=0.2)
+
+plot(log(x$数量),log(x$平均価格),col=factor(x$年月),cex=0.2)
+
+plot(log(x$数量),log(x$平均価格),col=factor(x$メーカー名称),cex=0.2)
+```
+
+```{r}
+library(ggplot2)
+
+lnq=log(x$数量)
+lnp=log(x$平均価格)
+df <- data.frame(cbind(x,lnq,lnp))
+colnames(df)=c(colnames(x),"lnq","lnp")
+
+# 属性Aごとにプロットを分割して描画
+ggplot(df, aes(x = lnq, y = lnp, col=factor(年月))) +
+  geom_point(cex=0.2) +coord_cartesian(ylim = c(4, 6))+
+  facet_wrap(~ df$メーカーコード) + # 属性Aごとにプロットを分割
+  labs(title = "by manufacture",
+       x = "q",
+       y = "p")
+```
+
+```{r}
+ggplot(df, aes(x = lnq, y = lnp, col=factor(地区コード))) +
+  geom_point(cex=0.2) + coord_cartesian(ylim = c(4, 6)) + 
+  facet_wrap(~ df$年月) + # 属性Aごとにプロットを分割
+  labs(title = "by month",
+       x = "q",
+       y = "p")
+```
+
+```{r}
+lnqx=log(x$数量.店)
+ggplot(df, aes(x = lnqx, y = lnp, col=factor(地区コード))) +
+  geom_point(cex=0.2) + coord_cartesian(ylim = c(4, 6)) +
+  facet_wrap(~ df$年月) + # 属性Aごとにプロットを分割
+  labs(title = "by month",
+       x = "q",
+       y = "p")
+```
+
+```{r}
+library(rstan)
+
+n=length(lnq)
+n_brand=42
+n_place=2
+
+brand_factor <- factor(df$メーカーコード)
+place_factor <- factor(df$地区コード)
+brand_int <- as.integer(brand_factor)
+place_int <- as.integer(place_factor)
+date_posixct <- as.POSIXct(df$出現日, format = "%Y年%m月%d日")
+date_double <- as.double(date_posixct)
+
+POS_data <- list(
+  N = n,
+  lnq = df$lnq,
+  lnp = df$lnp,
+  capacity = df$容量,
+  date = date_double,
+  brand = brand_int,
+  place = place_int,
+  n_brand = n_brand,
+  n_place = n_place
+)
+
+fit <- stan(
+  file = "Chapter12_POS_eg.stan", # Stanモデルファイルの名前
+  data = POS_data,      # データを格納したリスト
+  chains = 4,           # 4つのチェーンでサンプリング
+  iter = 2000,          # 各チェーンで2000回サンプリング
+  warmup = 1000,        # 最初の1000回をウォームアップ期間とする
+  control = list(
+    adapt_delta = 0.95  # 必要に応じて収束を改善するための調整
+  )
+)
+
+```
+
+```{r}
+# 推定結果の表示
+print(fit)
+print(fit, pars = c("delta", "sigma_q"))
+
+# サンプリングの収束状況を可視化
+# トレースプロットは、チェーンがうまく混ざっているかを確認するのに役立ちます
+traceplot(fit, pars = c("delta", "sigma_q", "mu_alpha"))
+```
