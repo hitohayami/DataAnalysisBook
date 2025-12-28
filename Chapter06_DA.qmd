@@ -16,7 +16,7 @@ id=lib_required %in% rownames(installed.packages())
 install.packages(lib_required[!id],dependencies=TRUE)
 for( pkg in lib_required ) library(pkg,character.only=T)
 
-V=read.csv(url("https://news.fbc.keio.ac.jp/~hhayami/data/hhs_IncomeClass.csv"))
+V=read.csv(url("https://raw.github.com/hitohayami/DataAnalysisBook/main/hhs_IncomeClass.csv"))
 
 (n_years=dim(V)[1])
 
@@ -67,7 +67,7 @@ plot(reg1)
 さすがに4次の項は統計的に有意でもない．
 
 ```{r}
-Xy=read.csv(url("https://news.fbc.keio.ac.jp/~hhayami/data/Engelcv.csv"))
+Xy=read.csv(url("https://raw.github.com/hitohayami/DataAnalysisBook/main/Engelcv.csv"))
 
 hist(y,nclass=80,freq=FALSE,main="",sub="Kernel Density")
 lines(density(y))

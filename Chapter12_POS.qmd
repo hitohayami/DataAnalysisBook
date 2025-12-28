@@ -7,7 +7,7 @@ editor: visual
 ## R Stan and POS data
 
 ```{r}
-pos_file="/Volumes/IODATA1TB/researches/DataScience/data/KSP-POS/東京大阪_2023.csv"
+pos_file=url('https://raw.github.com/hitohayami/DataAnalysisBook/main/TokyoOsaka_2023.csv')
 x=read.csv(pos_file)
 
 plot(log(x$数量),log(x$平均価格),cex=0.2,xlab="q",ylab="p")

@@ -298,8 +298,6 @@ for( p in seq(0.01,0.99,0.01) ){
   i=i+1
  }
 
-# load(url("https://fs0.fbc.keio.ac.jp/~hayami/data/ClopperPearson.RData"))
-
 plot(seq(0.01,0.99,0.01),Clopper,type="l",sub="Clopper-Pearson's Method: 95% Confidence Interval",xlab="True p",ylab="Ratio of the true p in the interval",ylim=c(0.85,1))
 # abline(h=0.95,col="red")
 abline(h=0.95,col="black",lty=3,lwd=3)
@@ -736,80 +734,4 @@ _=plt.title("Clopper Pearson's Method: 95% Confidence Interval")
 _=plt.xlabel("True p")
 _=plt.ylabel("Ratio of the true p in the interval")
 plt.show()
-```
-
-#################################### 
-
-## MNIST
-
-```{python}
-from matplotlib import font_manager as fm
-name_of_fonts=fm.findSystemFonts()
-```
-
-```{python}
-import numpy as np
-import pandas as pd
-import ssl
-import matplotlib.pyplot as plt
-from matplotlib import font_manager as fm
-import sys
-import requests
-
-ssl._create_default_https_context = ssl._create_unverified_context
-```
-
-```{python}
-from tensorflow.keras.datasets import mnist
-(train_images,train_labels), (test_images,test_labels)=mnist.load_data()
-
-import matplotlib.pyplot as plt
-digit = train_images[4]
-plt.imshow(digit, cmap=plt.cm.binary)
-plt.show()
-
-train_labels[4]
-```
-
-```{python}
-train_images.shape
-len(test_labels)
-```
-
-```{python}
-from tensorflow import keras
-from tensorflow.keras import layers
-
-network=models.Sequential([
-  layers.Dense(512,activation='relu'),
-  layers.Dense(10,activation='softmax')
-  ])
-network.compile(optimizer='rmsprop',loss='categorical_crossentropy',metrics=['accuracy'])
-train_images=train_images.reshape((60000,28*28))
-train_images=train_images.astype('float32')/255
-test_images=test_images.reshape((10000,28*28))
-test_images=test_images.astype('float32')/255
-from keras.utils import to_categorical
-train_labels=to_categorical(train_labels)
-test_labels=to_categorical(test_labels)
-network.fit(train_images,train_labels,epochs=5,batch_size=128)
-
-test_digits = test_images[0:10]
-predictions = model.predict(test_digits)
-predictions[0]
-
-predictions[0].argmax()
-
-predictions[0][7]
-
-test_labels[0]
-
-test_loss, test_acc = model.evaluate(test_images, test_labels)
-print(f"test_acc: {test_acc}")
-
-predictions = model(test_images)
-predictions = predictions.numpy()
-predicted_labels = np.argmax(predictions, axis=1)
-matches = predicted_labels == test_labels
-print(f"accuracy: {matches.mean():.2f}")
 ```
