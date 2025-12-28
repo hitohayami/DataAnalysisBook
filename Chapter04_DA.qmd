@@ -1,8 +1,7 @@
 ---
 title: "第4章"
-format: html
+format: docx
 editor: visual
-jupyter: python3
 ---
 
 ```{r}
@@ -10,7 +9,7 @@ jupyter: python3
 library(mlr3)
 library(mlr3learners)
 library(data.table)
-rating_data<-url('http://fs0.fbc.keio.ac.jp/~hayami/data/Rating_2022.RData')
+rating_data<-url('http://raw.github.com/hitohayami/DataAnalysisBook/main/Rating_2022.RData')
 load(rating_data)
 
 # 2. データの準備
