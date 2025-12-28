@@ -1,0 +1,114 @@
+---
+title: "第6章"
+author: "早見"
+format: docx
+editor: visual
+---
+
+## 
+
+回帰分析を『家計調査』(総務省統計局)データを使って試してみる．
+
+```{r Load_Data_and_Construction}
+local({r<-getOption("repos"); r["CRAN"] <- "https://cloud.r-project.org"; options(repos=r)})
+lib_required=c("knitr","rmarkdown")
+id=lib_required %in% rownames(installed.packages())
+install.packages(lib_required[!id],dependencies=TRUE)
+for( pkg in lib_required ) library(pkg,character.only=T)
+
+V=read.csv(url("https://news.fbc.keio.ac.jp/~hhayami/data/hhs_IncomeClass.csv"))
+
+(n_years=dim(V)[1])
+
+# Event Examples
+xBSE=which(V$Year=="2001")      # "2001-09-21"
+xBirdFlu=which(V$Year=="2004")  # "2004-01-30"
+xGyoza=which(V$Year=="2008")    # "2008-01-30"
+xMcDonald=which(V$Year=="2014") # "2014-07-21"
+xCOVID19=which(V$Year=="2020")  # "2020-2021"
+```
+
+```{r, fig.height=5,fig.width=9}
+id=order(V$TC)
+Expend=V$TC[id]/1000
+tmp=V$Food/V$TC
+Engel=tmp[id]
+plot(Expend,Engel,cex=0.5,xlab="支出(1000円)",ylab="食費の割合",main="")
+```
+
+データのプロットを見ると明らかに直線を当てはめるとずれていることがわかるが，めげずにやってみる． ついでに簡単な回帰分析の診断をする．
+
+```{r, fig.height=5,fig.width=9}
+reg0=lm(Engel ~ Expend)
+plot(Expend,Engel,cex=0.5,xlab="支出(1000円)",ylab="食費の割合",main="")
+abline(reg0,col=2)
+
+summary(reg0)
+
+plot(reg0)
+```
+
+不均一分散というかモデルが悪いと不均一分散があると診断される． 残差も正規分布していないことがわかる．
+
+ということで，多項式回帰をやってみる．
+
+```{r, fig.height=5,fig.width=9}
+plot(Expend,Engel,cex=0.5,xlab="支出(1000円)",ylab="食費の割合",main="")
+Ix_a=poly(Expend,4)
+reg1=lm(Engel~Ix_a)
+reg1_p=predict(reg1,Ix_a)
+lines(Expend,reg1_p,col=2)
+
+summary(reg1)
+
+plot(reg1)
+```
+
+さすがに4次の項は統計的に有意でもない．
+
+```{r}
+Xy=read.csv(url("https://news.fbc.keio.ac.jp/~hhayami/data/Engelcv.csv"))
+
+hist(y,nclass=80,freq=FALSE,main="",sub="Kernel Density")
+lines(density(y))
+
+plot(Expend,Engel,cex=0.5,xlab="支出(1000円)",ylab="食費の割合",main="")
+library(splines)
+
+x=Expend
+y=Engel
+Xy=data.frame(x,y)
+
+reg1=lm(y~ns(x,df=4),data=Xy)
+reg1_p=predict(reg1,Xy)
+plot(x,y,main="")
+lines(x,reg1_p,col=2)
+
+summary(reg1)
+plot(reg1)
+
+EngelCv_05=smooth.spline(x,y,df=5);
+EngelCv_15=smooth.spline(x,y,df=15);
+EngelCv_25=smooth.spline(x,y,df=25);
+EngelCv_50=smooth.spline(x,y,df=50);
+
+plot(x,y,main="")
+# lines(x_t,fx_t,type="l",col="purple",lwd=2)
+lines(EngelCv_05$x,EngelCv_05$y,type="l",col="green",lwd=2)
+lines(EngelCv_15$x,EngelCv_15$y,type="l",col="red",lwd=2)
+lines(EngelCv_25$x,EngelCv_25$y,type="l",col="cyan",lwd=2)
+lines(EngelCv_50$x,EngelCv_50$y,type="l",col="orange",lwd=2)
+
+write.csv(cbind(x,y),file="Engelcv.csv")
+
+plot(x,y,cex=0.3,xlab='支出(1000円)',ylab='食費の割合',main='')
+lines(x,reg1_p,col=2)
+
+plot(x,y,cex=0.3,xlab='支出(1000円)',ylab='食費の割合',main='')
+lines(EngelCv_05$x,EngelCv_05$y,type="l",col="green",lwd=2)
+lines(EngelCv_15$x,EngelCv_15$y,type="l",col="red",lwd=2)
+lines(EngelCv_25$x,EngelCv_25$y,type="l",col="cyan",lwd=2)
+lines(EngelCv_50$x,EngelCv_50$y,type="l",col="orange",lwd=2)
+
+
+```
