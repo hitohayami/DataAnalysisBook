@@ -1,0 +1,249 @@
+---
+title: "第11章"
+subtitle: "量子コンピュータ・シミュレータ: Python"
+format: docx
+editor: visual
+---
+
+```{python}
+#| label: python
+import numpy as np
+from qiskit.quantum_info import Statevector
+from qiskit.visualization import plot_state_city
+import matplotlib.pyplot as plt
+# --- 1. 2量子ビットの状態を生成 ---
+# 2量子ビットなので状態空間の次元は 2^2=4 です。
+# from_int(0, 4) は、4次元の状態ベクトル|00>を生成します。
+x = Statevector.from_int(0, 4)
+print("--- 2-Qubit State (|00>) ---")
+print(x)
+```
+
+```{python}
+#| label: 
+import numpy as np
+import matplotlib.pyplot as plt
+from qiskit import QuantumCircuit, transpile, ClassicalRegister
+# QFTクラスはqiskit.circuit.libraryからインポートするのが現在の標準的な方法です
+from qiskit.circuit.library import QFT, TGate
+from qiskit.quantum_info import Statevector
+from qiskit.visualization import plot_state_city, plot_histogram
+from qiskit_aer import AerSimulator
+# =========================================================
+# 1. 量子フーリエ変換 (Quantum Fourier Transformation)
+# =========================================================
+print("--- 1. 量子フーリエ変換 (QFT) ---")
+
+# 3量子ビットの|000>状態にQFTを適用します。
+qc_qft3 = QuantumCircuit(3)
+# QiskitのQFTライブラリを使用します。do_swaps=Trueでビットの順序を数学的定義に合わせます。
+qft3_gate = QFT(num_qubits=3, do_swaps=True)
+qc_qft3.append(qft3_gate, range(3))
+state_qft3 = Statevector(qc_qft3)
+
+print("\nQFT適用後の3量子ビット状態:")
+# QFT|000>は全状態の均等な重ね合わせになります。
+# 1/sqrt(8) * (|000> + |001> + ... + |111>)
+print(state_qft3.draw('latex', prefix='|\\psi\\rangle = '))
+plot_state_city(state_qft3, title="3-Qubit QFT on |000>")
+plt.show()
+
+# 4量子ビットの|0000>状態にQFTを適用します。
+qc_qft4 = QuantumCircuit(4)
+qft4_gate = QFT(num_qubits=4, do_swaps=True)
+qc_qft4.append(qft4_gate, range(4))
+state_qft4 = Statevector(qc_qft4)
+print("\n4量子ビットのQFTプロット:")
+plot_state_city(state_qft4, title="4-Qubit QFT on |0000>")
+plt.show()
+```
+
+```{python}
+#| label: 2. 量子位相推定 (Quantum Phase Estimation)
+print("\n--- 2. 量子位相推定 (QPE) ---")
+# U = Tゲート, U|1> = exp(i*pi/4)|1> なので、求めたい位相θは 1/8 = 0.125 です。
+# 3ビットの精度で位相を推定 (推定用レジスタ)
+# 1ビットはユニタリゲートUを適用する固有状態用 (ターゲットレジスタ)
+ESTIMATION_QUBITS = 3
+TARGET_QUBITS = 1
+qc_qpe = QuantumCircuit(ESTIMATION_QUBITS + TARGET_QUBITS, ESTIMATION_QUBITS)
+
+# --- QPEアルゴリズムのステップ ---
+# 1. 固有状態の準備
+# Tゲートの固有状態|1>をターゲットレジスタに準備します。
+qc_qpe.x(ESTIMATION_QUBITS) # Target qubit is the last one
+qc_qpe.barrier()
+
+# 2. 推定用レジスタにアダマールゲートを適用
+qc_qpe.h(range(ESTIMATION_QUBITS))
+qc_qpe.barrier()
+
+# 3. Controlled-Unitaryを適用
+# U = Tゲートとして、C-U, C-U^2, C-U^4, ... を適用します。
+for control_qubit in range(ESTIMATION_QUBITS):
+    power = 2**control_qubit
+    # Qiskitでは .power() と .control() で簡単に実装できます。
+    controlled_t_gate = TGate().power(power).control(1)
+    qc_qpe.append(controlled_t_gate, [control_qubit, ESTIMATION_QUBITS])
+qc_qpe.barrier()
+
+# 4. 逆量子フーリエ変換を適用
+# DeprecationWarningが表示されることがありますが、qiskit.circuit.library.QFTは現在の標準的な使い方です
+inverse_qft_gate = QFT(num_qubits=ESTIMATION_QUBITS, inverse=True, do_swaps=True)
+qc_qpe.append(inverse_qft_gate, range(ESTIMATION_QUBITS))
+qc_qpe.barrier()
+
+# 5. 測定
+qc_qpe.measure(range(ESTIMATION_QUBITS), range(ESTIMATION_QUBITS))
+
+# --- 結果の確認 ---
+# 回路図の表示
+print("\nQPE 回路図:")
+# qc_qpe.draw('mpl')はpylatexencライブラリ関連のエラーが出ることがあります。
+# その場合、下の'text'を使うと、テキストベースの回路図が表示され、エラーを回避できます。
+print(qc_qpe.draw('text'))
+
+# シミュレーションと結果の解釈
+simulator = AerSimulator()
+compiled_circuit = transpile(qc_qpe, simulator)
+result = simulator.run(compiled_circuit, shots=4096).result()
+counts = result.get_counts(compiled_circuit)
+
+# 結果の表示
+print("\n測定結果 (counts):")
+# Qiskitのビット順は逆(q2,q1,q0)なので、表示用に反転させます
+reversed_counts = {k[::-1]: v for k, v in counts.items()}
+print(reversed_counts)
+plot_histogram(reversed_counts, title="QPE Measurement Result for T-gate")
+plt.show()
+
+# 結果の解釈
+measured_str = max(reversed_counts, key=reversed_counts.get) # 最も頻度の高い結果を取得
+measured_int = int(measured_str, 2)
+phase = measured_int / (2**ESTIMATION_QUBITS)
+print(f"\n最も頻度の高い測定結果: |{measured_str}>")
+print(f"推定された位相 (測定値/2^n): {measured_int} / {2**ESTIMATION_QUBITS} = {phase}")
+print(f"理論値 (1/8): {1/8}")
+```
+
+```{python}
+#| label: Glover's Algorithm
+import numpy as np
+import matplotlib.pyplot as plt
+from qiskit import QuantumCircuit, transpile
+from qiskit.quantum_info import Statevector
+from qiskit.visualization import plot_state_city
+from qiskit_aer import AerSimulator
+
+# =========================================================
+# Grover's Algorithm: Oracle and Diffuser
+# 探索ターゲット: |10> (2)
+# 量子ビット数: 2 (探索用) + 1 (アンシラ) = 3
+# =========================================================
+,
+# --- 1. オラクル (Oracle) ---
+# |x>|q> -> |x>|q XOR f(x)>
+# f(x) = 1 if x=|10>, f(x) = 0 otherwise
+def create_oracle_circuit():
+    """
+    状態 |10> をマークするオラクル回路を生成します。
+    (q2, q1, q0) のうち、q2とq1が探索用、q0がアンシラビットです。
+    |10> は q2=1, q1=0 に対応します。
+    """
+    oracle = QuantumCircuit(3, name='Oracle')
+    # |10> をマークするために、q1(1番目の量子ビット)をコントロールとして反転させます
+    oracle.x(1)
+    # 制御ビット q2, q1 が |11> のときにターゲット q0 を反転
+    oracle.ccx(2, 1, 0)
+    # q1を元に戻します
+    oracle.x(1)
+    return oracle
+
+# --- オラクルの動作確認 ---
+print("--- オラクルの動作確認 ---")
+# 入力|00>, 出力|00>
+qc_check0 = QuantumCircuit(3)
+qc_check0.append(create_oracle_circuit(), [2, 1, 0])
+print("入力 |000> -> 出力:", Statevector(qc_check0).draw('latex_source'))
+# oracle (位相が反転)
+qc_check2 = QuantumCircuit(3)
+qc_check2.x(2)
+# 位相キックバックを見るために、アンシラを|-⟩状態にする
+qc_check2.x(0)
+qc_check2.h(0)
+qc_check2.barrier()
+qc_check2.append(create_oracle_circuit(), [2, 1, 0])
+qc_check2.barrier()
+qc_check2.h(0)
+qc_check2.x(0)
+print("\n入力 |10>|-> -> 位相キックバック後の状態:")
+plot_state_city(Statevector(qc_check2))
+plt.show()
+```
+
+```{python}
+# --- 2. ディフューザー (Amplification / Diffuser) ---
+# R: V <- function(x) { ... }
+# 均一な重ね合わせ状態|s>を中心に振幅を反転させる操作
+def create_diffuser_circuit():
+    """
+    Groverの増幅回路（ディフューザー）を生成します。
+    探索用の2量子ビットに適用します。
+    """
+    diffuser = QuantumCircuit(2, name='Diffuser')
+    # 1. Hゲートを適用
+    diffuser.h([0, 1])c
+    # 2. Xゲートを適用
+    diffuser.x([0, 1])
+    # 3. Zゲートの制御版 (CZゲート)
+    diffuser.h(1)
+    diffuser.cx(0, 1)
+    diffuser.h(1)
+    # 4. Xゲートを適用
+    diffuser.x([0, 1])
+    # 5. Hゲートを適用
+    diffuser.h([0, 1])
+    return diffuser
+```
+
+```{python}
+#| label: 3. Groverアルゴリズムの実行
+print("\n--- Groverアルゴリズムの実行 ---")
+# 初期状態の準備: 探索用2量子ビットを均一な重ね合わせに
+psi = QuantumCircuit(3)
+psi.h([1, 2]) # q1, q2にHゲート
+
+# Qiskitでは、オラクルとディフューザーを順番に回路に追加します。
+# RのU(x)は位相キックバックのためのオラクル適用に対応します。
+# 位相キックバックのためにアンシラ(q0)を|->状態にする
+psi.x(0)
+psi.h(0)
+psi.barrier()
+
+# --- 1回目のGroverイテレーション ---
+# オラクルを適用
+psi.append(create_oracle_circuit(), [2, 1, 0])
+psi.barrier()
+
+# ディフューザーを適用 (探索用ビット q1, q2 に)
+psi.append(create_diffuser_circuit(), [1, 2])
+
+print("Grover回路図:")
+# print(psi.draw('text'))
+psi.draw('text')
+```
+
+```{python}
+#| label: --- 結果の確認 ---
+final_state = Statevector(psi)
+print("\n最終状態のプロット:")
+plot_state_city(final_state)
+plt.show()
+
+# 確率を計算
+probabilities = final_state.probabilities_dict()
+print("\n各状態の測定確率:")
+# 表示用にビット順を調整 (q2, q1, q0)
+formatted_probs = {f"|{k[0]}{k[1]}> (ancilla:{k[2]})": v for k, v in probabilities.items()}
+print(formatted_probs)
+```

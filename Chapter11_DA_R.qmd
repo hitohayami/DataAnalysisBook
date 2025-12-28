@@ -1,0 +1,96 @@
+---
+title: "第11章"
+subtitle: "量子コンピュータ・シミュレータ R"
+format: docx
+editor: visual
+---
+
+```{r}
+#| label: SimulateRの準備
+library("qsimulatR")
+x <- qstate(nbits=2)
+x
+
+CatInBox <- qstate(nbits=1, basis=c("|dead>", "|alive>"))
+CatInBox
+
+CatInBox <- qstate(nbits=1, basis=c("|dead>", "|alive>"),
+                   coefs=as.complex(c(1/sqrt(2), 1/sqrt(2))))
+CatInBox
+
+plot(x, qubitnames=c("qubit1", "qubit2"))
+```
+
+```{r}
+#| label: 2. カスタム基底名を持つ1量子ビットの状態
+# デフォルトの|0>状態を生成します。
+cat_in_box_basis = Statevector.from_int(0, 2)
+print("\n--- 1-Qubit State (|0>) ---")
+print("# |0> を |dead> と解釈します")
+print(cat_in_box_basis)
+```
+
+```{r}
+#| label: Hadamard Gate
+x <- qstate(nbits=2)
+y <- H(1) * x
+y
+plot(y)
+```
+
+```{r}
+#| label: オリジナルのゲートを作る
+myGate <- function(bit) {
+  methods::new("sqgate", bit=as.integer(bit),
+               M=array(as.complex(c(1,0,0,-1)), dim=c(2,2)),
+               type="myGate")
+}
+z <- myGate(1) * y
+z
+plot(z)
+
+＃CNOT
+truth.table(X, 1)
+truth.table(CNOT, 2)
+z <- CNOT(c(1,2)) * y
+z
+plot(z)
+
+＃ Gate
+CX12 <- cqgate(bits=c(1L, 2L), gate=X(2L))
+z <- CX12 * y
+z
+z <- SWAP(c(1,2)) * y
+z
+plot(z)
+z <- SWAP(c(2,1)) * y
+z
+x <- H(1) *(H(2) * qstate(3))
+x
+y <- CCNOT(c(1,2,3)) * x
+y
+plot(y)
+
+y <- CSWAP(c(1,2,3)) * x
+y
+plot(y)
+```
+
+```{r}
+#| label: 複数のGates
+myswap <- function(bits){
+    function(x){
+        CNOT(bits) * (CNOT(rev(bits)) * (CNOT(bits) * x))
+    }
+}
+truth.table(myswap, 2)
+circuit <- myswap(1:2)
+plot(circuit(qstate(2)))
+
+# measure
+res <- measure(y, 1)
+summary(res)
+plot(res$psi)
+rv <- measure(y, 3, rep=10000)$value
+hist(rv, freq=FALSE, main="Probability for Qubit 3")
+```

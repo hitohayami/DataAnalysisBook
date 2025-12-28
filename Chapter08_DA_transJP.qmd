@@ -1,0 +1,63 @@
+---
+title: "第8章"
+subtitle: "AI(深層学習)すでに学習されたモデルtransformer+GPT2を使う"
+author: "ここは自分の名前に変える"
+format: docx
+jupyter: python3
+editor: source
+always_allow_html: true
+---
+
+```{python}
+#| label: 必要なpythonのパッケージのインストール
+# transformers: モデルを動かす本体
+# sentencepiece: 日本語を単語に分解するのに必要
+%pip install --update --quiet transformers sentencepiece torch
+```
+
+```{python}
+#| label: transformers
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+# 初回実行時はモデルのダウンロード(約1.3GB)が行われます
+model_name = "rinna/japanese-gpt2-medium"
+
+print(f"Loading {model_name} ...")
+tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+model = AutoModelForCausalLM.from_pretrained(model_name)
+```
+
+```{python}
+#| label: encode
+# 「データサイエンスとは、」を入力してみます．ここはいろいろ変えられます．
+text = "データサイエンスとは、"
+
+# テキストをモデルが理解できる数字（ID）に変換
+token_ids = tokenizer.encode(text, add_special_tokens=False, return_tensors="pt")
+```
+
+```{python}
+#| label: Generating text
+print("Generating text...")
+with torch.no_grad():
+    output_ids = model.generate(
+        token_ids.to(model.device),
+        max_length=100,         # 生成する最大長
+        min_length=50,          # 最低これくらいは書く
+        do_sample=True,         # ランダムサンプリング（これがないと毎回同じ文章になる）
+        top_k=50,               # 確率の高い上位50単語から選ぶ
+        top_p=0.95,             # 確率の合計が95%になる範囲から選ぶ
+        pad_token_id=tokenizer.pad_token_id,
+        bos_token_id=tokenizer.bos_token_id,
+        eos_token_id=tokenizer.eos_token_id
+    )
+
+# Decode
+output_text = tokenizer.decode(output_ids.tolist()[0])
+
+print("-" * 20)
+print("【生成結果】")
+print(output_text)
+print("-" * 20)
+```
