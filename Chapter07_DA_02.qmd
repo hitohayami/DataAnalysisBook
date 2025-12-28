@@ -1,0 +1,141 @@
+---
+title: "第7章"
+subtitle: "バニラ・ニューラルネット Python"
+author: "ここは自分の名前に変える"
+format: docx
+editor: source
+always_allow_html: true
+fontsize: 10pt
+---
+
+```{python}
+#| label: Install_packages
+#| echo : false
+#| include: false
+
+import importlib.util
+import subprocess
+
+def check_installed(package_name):
+    if importlib.util.find_spec(package_name) : 
+      return("")
+    else :
+      return(package_name)
+
+def install_package(package_name):
+    subprocess.check_call(["pip3", "install", package_name])
+
+# List of required packages
+required_packages = ["numpy", "matplotlib","scipy","pandas","statsmodels","scikit-learn","dtreeviz"]
+
+for pkg in required_packages:
+    missing_packages=check_installed(pkg)
+    if len(missing_packages)>0 :
+      print("Installing missing packages:")
+      print(f"Installing {pkg}...")
+      install_package(pkg)
+    else:
+      print(f"{pkg} is already installed.")
+
+import datetime
+dt_now = datetime.datetime.now()
+```
+
+# データについて
+例によって企業の格付けデータを使っている．自分で準備したものではなくこの格付けデータを利用する場合はURLで与えられているファイルである．
+
+読み込んだら，読み込んだ数を確認して，全体のデータをトレーニング・データとテスト・データに分ける．
+分けるときに，乱数の種を指定する．
+883にしておくと同じ答えになる．
+違う値だと5つのクラスに分かれないこともあるので大変になる．
+トレーニング用のサンプル・サイズは327としている．
+
+```{python}
+#| label: Prepare_data
+import pandas as pd
+x=pd.read_csv("https://raw.github.com/hitohayami/DataAnalysisBook/main/Rating_2022.csv",encoding="utf-8")
+y=x.loc[:,["rating"]]
+# X=x.loc[:,["PER","PBR","ROE","ROA","PCFR","EVperEBIT","ICR","SP01","SP02","SP03","SP04","SP06","SP07","SP08","SP09","SP10","DSP","DInd"]]
+X=x.loc[:,["PER","PBR","ROE","ROA","PCFR","EVperEBIT","ICR","SP01","SP02","SP03","SP04","SP06","SP07","SP08","SP09","SP10"]]
+y['rating'].value_counts()
+```
+
+```{python}
+#| label: Seperate_Data
+import numpy as np
+np.random.seed(431)
+indices = np.random.permutation(len(y))
+X_tmp=X.values; y_tmp=y.values
+X_train=X_tmp[indices[:-142],]
+y_train=y_tmp[indices[:-142]].reshape(327)
+X_test =X_tmp[indices[-142:],]
+y_test =y_tmp[indices[-142:]].reshape(142)
+
+print(dt_now)
+print("[1]",dt_now)
+print("Training Data = ",len(y_train),'\n',pd.value_counts(y_train))
+print("Test Data = ",len(y_test),'\n',pd.value_counts(y_test))
+```
+
+# ニューラル・ネットによる分類
+
+ニューラル・ネットのサイズsizeは隠れレイヤー(層)のユニットの個数である．
+あまり多くすると時間がかかるので，これも実際に選択する場合には適当な基準によって決めることが望ましい．
+ここでは，便宜的に40としている．
+
+次のコードはガウシアン・ナイーブ・ベイズによる分類である．
+
+```{python}
+#| label: Neural_network_rating_1
+# Gaussian Naive Bayese Classifiers
+from sklearn.naive_bayes import GaussianNB
+GNB_clf=GaussianNB()
+
+# Training GNB
+GNB_clf.fit(X=X_train,y=y_train)
+
+# Training Prediction
+y_GNB_train = GNB_clf.predict(X_train)
+GNB_train=pd.crosstab(y_GNB_train,y_train)
+GNB_train_accuracy=np.diagonal(GNB_train).sum()/GNB_train.sum().sum()
+
+
+# Testing GNB
+y_GNB_test = GNB_clf.predict(X_test)
+GNB_test=pd.crosstab(y_GNB_test,y_test)
+GNB_test_accuracy=np.diagonal(GNB_test).sum()/GNB_test.sum().sum()
+
+print(GNB_train)
+print(GNB_test)
+
+print("Naive Bayes 正解率=%.4f %% トレーニング " % (GNB_train_accuracy*100) )
+print("Naive Bayes 正解率=%.4f %% テスト" % (GNB_test_accuracy*100) )
+```
+
+## マルティレイヤー・パーセプトロンによる分類
+
+```{python}
+#| label: Neural_network_rating_2
+
+from sklearn.neural_network import MLPClassifier
+MLPC_clf=MLPClassifier()
+MLPC_clf.fit(X=X_train,y=y_train)
+
+# Training Prediction
+y_MLPC_train = MLPC_clf.predict(X_train)
+MLPC_train=pd.crosstab(y_MLPC_train,y_train)
+MLPC_train_accuracy=np.diagonal(MLPC_train).sum()/MLPC_train.sum().sum()
+
+# Testing MLPC
+y_MLPC_test = MLPC_clf.predict(X_test)
+MLPC_test=pd.crosstab(y_MLPC_test,y_test)
+MLPC_test_accuracy=np.diagonal(MLPC_test).sum()/MLPC_test.sum().sum()
+
+print(MLPC_train)
+print(MLPC_test)
+
+print("ML Perceptron 正解率=%.4f %% トレーニング " % (MLPC_train_accuracy*100) )
+print("ML Perceptron 正解率=%.4f %% テスト" % (MLPC_test_accuracy*100) )
+dt_now = datetime.datetime.now()
+print(dt_now)
+```
