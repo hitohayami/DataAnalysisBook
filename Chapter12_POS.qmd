@@ -1,5 +1,5 @@
 ---
-title: "POS_eg.qmd"
+title: "第12章"
 format: docx
 editor: visual
 ---
@@ -21,8 +21,6 @@ plot(log(x$数量),log(x$平均価格),col=factor(x$地区コード),cex=0.2)
 plot(log(x$数量),log(x$平均価格),col=factor(x$年月),cex=0.2)
 
 plot(log(x$数量),log(x$平均価格),col=factor(x$メーカー名称),cex=0.2)
-
-
 ```
 
 ```{r}
@@ -88,7 +86,7 @@ POS_data <- list(
 )
 
 fit <- stan(
-  file = "POS_eg.stan", # Stanモデルファイルの名前
+  file = "Chapter12_POS_eg.stan", # Stanモデルファイルの名前
   data = POS_data,      # データを格納したリスト
   chains = 4,           # 4つのチェーンでサンプリング
   iter = 2000,          # 各チェーンで2000回サンプリング
@@ -108,5 +106,4 @@ print(fit, pars = c("delta", "sigma_q"))
 # サンプリングの収束状況を可視化
 # トレースプロットは、チェーンがうまく混ざっているかを確認するのに役立ちます
 traceplot(fit, pars = c("delta", "sigma_q", "mu_alpha"))
-
 ```
