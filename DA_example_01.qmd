@@ -1,0 +1,183 @@
+---
+title: "Example_01"
+author: "早見　均"
+format: docx
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+```
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+Kanji="MSGothic"
+RInfor=sessionInfo()$running
+if( grep("mac",RInfor)>0 ) {
+  Kanji="HiraKakuProN-W3"
+}
+
+# ggplot2の時
+# theme_bw(base_family = "HiraKakuProN-W3")
+```
+
+The `echo: false`
+
+```{r}
+#| echo: true
+#| fig-width: 3
+#| fig-height: 3
+#| fig-cap: "Uniform Random Variable"
+#| fig-cap-location: "bottom"
+
+n=5000
+set.seed(563)
+x=runif(n)
+y=runif(n)
+theta=seq(0,pi/2,0.01)
+plot(x,y,xlim=c(0,1),ylim=c(0,1),cex=0.01,sub="円周率の計算",family=Kanji)
+lines(cos(theta),sin(theta),col="red")
+# curve(sqrt(1-x**2),from=0,to=1,col="red",add=TRUE)
+```
+
+```{python}
+import matplotlib.pyplot as plt
+import numpy as np
+x=np.linspace(0.01,10,100)
+fig=plt.figure()
+plt.plot(x,np.sin(x)*x,'-')
+plt.plot(x,np.cos(x)*x,'--')
+plt.show()
+```
+
+```{r}
+# 発生させる確率変数の個数
+n=500000
+set.seed(563)
+x=runif(n)
+y=runif(n)
+r2=x**2+y**2
+# r=length(which(r2<1))/n
+r=sum(ifelse(r2<=1,1,0))/n
+print(r*4)
+```
+
+```{r}
+n=5000000
+set.seed(563)
+x=runif(n)
+y=runif(n)
+r2=x**2+y**2
+z=ifelse(r2<=1,1,0)
+mypi=cumsum(ifelse(r2<=1,1,0))/seq(1,n)*4
+xlabel=paste("pi=",toString(mypi[n],width=12))
+ylabel="piの推定値"
+id=seq(10000,n,by=10000)
+plot(mypi[id],type="l",ylim=c(3.13,3.15),xlab=xlabel,ylab=ylabel,sub="円周率の収束",family=Kanji)
+abline(h=pi,col="red")
+
+
+```
+
+```{r coded_by_ChatGPT_20240323}
+# Function to estimate pi using Monte Carlo simulation
+estimate_pi <- function(num_points) {
+  inside_circle <- 0
+  
+  for (i in 1:num_points) {
+    x <- runif(1, min = -1, max = 1)
+    y <- runif(1, min = -1, max = 1)
+    if (x^2 + y^2 <= 1) {
+      inside_circle <- inside_circle + 1
+    }
+  }
+  
+  # Estimate pi
+  estimated_pi <- 4 * inside_circle / num_points
+  
+  return(estimated_pi)
+}
+
+# Number of points to generate
+num_points <- 100000
+
+# Estimate pi
+estimated_pi <- estimate_pi(num_points)
+
+cat("Estimated value of pi:", estimated_pi, "\n")
+
+```
+
+
+```{r}
+# 消費者物価指数 csv, shift-jis
+url="https://www.e-stat.go.jp/stat-search/file-download?statInfId=000032103844&fileKind=1"
+cpi2=read.csv(url,fileEncoding = "shift-jis")
+filename_csv="cpi.csv"
+download.file(url, filename_csv, method = "auto")
+cpi=read.csv(filename_csv,fileEncoding = "shift-jis")
+cpi=cpi[-c(1:5),]
+rownames(cpi)=NULL
+colnames(cpi)[1]="年月"
+m=dim(cpi)[2]
+cpi[,2:m]=apply(cpi[,2:m],2,as.numeric)
+dlnCPI=diff(log(cpi$総合),lag=12)*100
+Monthly=seq(1971.0,2024.+1/12,by=1/12)
+plot(Monthly,dlnCPI,type="l",xlab="",ylab="%",sub="総合CPI変化率(対前年比)",family=Kanji)
+abline(h=0,lty="dotted")
+
+url="https://www.esri.cao.go.jp/jp/sna/data/data_list/sokuhou/files/2023/qe234_2/tables/gaku-mg2342.csv"
+sna=read.csv(url,fileEncoding="shift-jis")
+
+library(readxl)
+# 国勢調査令和2年 xlsx 単一シート
+url="https://www.e-stat.go.jp/stat-search/file-download?statInfId=000032142402&fileKind=0"
+filename_xlsx="pop_census.xlsx"
+download.file(url, filename_xlsx, method = "auto")
+pop=read_xlsx(filename_xlsx)
+file.remove(filename_xlsx)
+
+pop=pop[-c(1:14),]
+rownames(pop)=NULL
+colnames(pop)=c("code","Pref2000","RCode2000","R2000","Pref2020","RCode2020","RName","total","male","female","total2015","dN","r_dN","r_gender","area_km2","density","HH","HH_generic","HH_facility","HH2015","dHH","r_dHH","HHmem","HHmem_g","HHmem_f")
+m=dim(pop)[2]
+pop[,8:m]=apply(pop[,8:m],2,as.numeric)
+
+# 労働力調査 長期時系列 シートが複数ある
+url="https://www.e-stat.go.jp/stat-search/file-download?statInfId=000031831358&fileKind=0"
+filename_xlsx="lfs.xlsx"
+download.file(url, filename_xlsx, method = "auto")
+lfs=read_xlsx(filename_xlsx,sheet="原数値")
+lfs=lfs[-c(1:15),]
+colnames(lfs)=c("Year","Month","Month_en","Blnk","LF","LF_m","LF_f","Emp","Emp_m","Emp_f","Empee","Empee_m","Empee_f","U","U_m","U_f","NLF","NLF_m","NLF_f","UR","UR_m","UR_f")
+n=dim(lfs)[1]
+lfs=lfs[-c((n-13):n),]
+rownames(lfs)=NULL
+m=dim(lfs)[2]
+lfs[,5:m]=apply(lfs[,5:m],2,as.numeric)
+LFMonth=seq(1972.5,2024.085,by=1/12)
+plot(LFMonth,lfs$UR,type="l",sub="完全失業率",ylab="%",xlab="",family = "HiraKakuProN-W3")
+n=length(dlnCPI)
+UR=lfs$U/lfs$LF*100
+plot(UR,dlnCPI[19:n],cex=0.2,sub="Phillips Relations",xlab="失業率",ylab="インフレ率",family=Kanji)
+```
+
+```{r}
+dlnCPI=ts(dlnCPI,start=c(1971,1),frequency=12)
+plot.ts(dlnCPI,type="l")
+abline(h=0,lty="dotted")
+```
+
