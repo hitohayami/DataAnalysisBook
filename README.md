@@ -1,6 +1,6 @@
-# Example Codes for "Knowledge and Technique for the Data Analysis"
+# Example Codes for <i> Knowledge and Technique for the Data Analysis </i>
 
-This repository contains the source code for the book **"Knowledge and Technique for the Data Analysis"** (Japanese Title: データ分析の知識と技術 *[※ここ正しい日本語タイトルを入れてください]*), written by **Hitoshi Hayami**. The book is scheduled to be published by **Baifukan**.
+This repository contains the source code for the book ** <i>Knowledge and Technique for the Data Analysis</i> ** (Japanese Title: 『データ分析の知識と技術』 ), written by **Hitoshi Hayami**. The book is scheduled to be published by **Baifukan** (培風館).
 
 ## Repository Contents
 * **Quarto Markdown (`.qmd`)**: Contains the R and Python code examples presented in the book.
