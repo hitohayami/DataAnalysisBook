@@ -1,4 +1,4 @@
-# Example Codes for <i> Knowledge and Technique for the Data Analysis </i>
+# Example Codes for <i> Knowledge and Technique for Data Analysis </i>
 
 This repository contains the source code for the book **<i>Knowledge and Technique for Data Analysis</i>** (Japanese Title: 『データ分析の知識と技術』 ), written by **Hitoshi Hayami**. The book is scheduled to be published by **Baifukan** (培風館).
 
