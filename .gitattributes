@@ -1,0 +1,5 @@
+# 生成されたHTMLファイルを集計から除外する
+*.html linguist-generated
+*.css linguist-generated
+*.js linguist-generated
+*.stan linguist-generated
