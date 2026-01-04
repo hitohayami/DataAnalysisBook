@@ -1,0 +1,228 @@
+---
+title: "第7章"
+subtitle: "バニラ・ニューラルネット R"
+author: "ここは自分の名前に変える"
+format: docx
+editor: source
+always_allow_html: true
+fontsize: 10pt
+---
+
+```{r}
+#| label: setup
+#| include: false
+#| echo: false
+local({r<-getOption("repos"); r["CRAN"] <- "https://cloud.r-project.org"; options(repos=r)})
+lib_required=c("knitr","rmarkdown","parallel","doParallel","neuralnet","nnet","ggplot2","DiagrammeR","RSNNS","NeuralNetTools")
+
+id=lib_required %in% rownames(installed.packages())
+install.packages(lib_required[!id],dependencies=TRUE)
+for( pkg in lib_required ) library(pkg,character.only=T)
+
+knitr::opts_chunk$set(echo = TRUE)
+library(doParallel)  # 並列計算
+detectCores()
+registerDoParallel(cores=detectCores())
+```
+
+# データについて
+例によって企業の格付けデータを使っている．自分で準備したものではなくこの格付けデータを利用する場合はURLで与えられているファイルである．
+
+読み込んだら，読み込んだ数を確認して，全体のデータをトレーニング・データとテスト・データに分ける．
+分けるときに，乱数の種を指定する．
+883にしておくと同じ答えになる．
+違う値だと5つのクラスに分かれないこともあるので大変になる．
+トレーニング用のサンプル・サイズは230としている．
+
+データの固有値のチェックは，因子が線形関係(multi-colinearity)にあると，解が求められないのでだめ．
+
+```{r}
+#| label: Data
+print(Sys.time())
+rating_data<-url('https://raw.github.com/hitohayami/DataAnalysisBook/main/Rating_2022.RData')
+load(rating_data)
+dim(x)
+(n=dim(x)[1])
+
+# ラーニングのためデータを分割
+set.seed(883)
+# size=230でrandom sampling する
+n_size=230
+train_id <- sample(1:n,n_size)
+table(x$rating[train_id])
+table(x$rating[-train_id])
+x_train=x[train_id,]
+x_test=x[-train_id,]
+```
+
+# ニューラル・ネットによる分類
+Rには隠れ層が1つしかない単純なニューラル・ネットワークのpackage nnetと，より詳細にネットワークを構成できるpackage neuralnetがある．
+
+## 隠れ層が1つの単純なニューラル・ネットワーク
+まずは簡単にできるnnetパッケージで試してみる．
+
+ニューラル・ネットのサイズsizeは隠れレイヤー(層)のユニットの個数である．
+あまり多くすると時間がかかるので，これも実際に選択する場合には適当な基準によって決めることが望ましい．
+ここでは，sizeを，3,10,30としている．
+
+nnetのオプションには直接的にtype="class"を指定できないので，
+トレーニング・データのクラスわけはpredictを使って，トレーニング・データに当てはめることで格付けの名前を付けている．
+さもなければ，idx=apply(nnet_rating$fitted.values,1,which.max)として，何番目の確率が一番高いかをもとめて，idxに保存して，その番号に該当するクラス名(格付け)をテーブルにする．
+
+```{r}
+#| label: Neural_network_rating_1
+registerDoParallel(cores=detectCores())
+
+# function for print the results
+get_nnet<-function(Model_nnet,X_data){
+  nnet_cls=predict(Model_nnet, newdata=X_data, type="class")
+  print(c(length(X_data$rating),length(nnet_cls)))
+  nnet_conf=table(X_data$rating,nnet_cls)
+  id_actual=order(rownames(nnet_conf))
+  id_predic=order(colnames(nnet_conf))
+  print(nnet_conf[id_actual,id_predic])
+  r_nnet=sum(diag(nnet_conf[id_actual,id_predic]))/sum(nnet_conf)
+  return(r_nnet)
+}
+
+# Training
+nnet_rating=nnet(factor(rating) ~ PER+PBR+ROE+ROA+PCFR+EVperEBIT+ICR+SP02+SP03+SP04+SP06+SP07+SP08+SP09+SP10+DSP+DInd, data=x_train, size = 3, maxit=1500)
+
+print("Training")
+r_accur_nnet1_tr=get_nnet(nnet_rating,x_train)
+sprintf("%s %.5f","Training Accuracy",r_accur_nnet1_tr)
+
+# Test
+print("Test")
+r_accur_nnet1_te=get_nnet(nnet_rating,x_test)
+sprintf("%s %.5f","Test Accuracy",r_accur_nnet1_te)
+
+plotnet(nnet_rating)
+```
+
+```{r}
+#| label: Neural_network_rating_2
+nnet_rating=nnet(factor(rating) ~ PER+PBR+ROE+ROA+PCFR+EVperEBIT+ICR+SP02+SP03+SP04+SP06+SP07+SP08+SP09+SP10+DSP+DInd, data=x_train, size = 20, maxit=1500)
+
+print("Training")
+r_accur_nnet2_tr=get_nnet(nnet_rating,x_train)
+sprintf("%s %.5f","Training Accuracy",r_accur_nnet2_tr)
+
+# Test
+print("Test")
+r_accur_nnet2_te=get_nnet(nnet_rating,x_test)
+sprintf("%s %.5f","Test Accuracy",r_accur_nnet2_te)
+
+plotnet(nnet_rating)
+```
+
+```{r}
+#| label: Neural_network_rating_3
+nnet_rating=nnet(factor(rating) ~ PER+PBR+ROE+ROA+PCFR+EVperEBIT+ICR+SP02+SP03+SP04+SP06+SP07+SP08+SP09+SP10+DSP+DInd, data=x_train, size = 30, maxit=1500)
+
+print("Training")
+r_accur_nnet3_tr=get_nnet(nnet_rating,x_train)
+sprintf("%s %.5f","Training Accuracy",r_accur_nnet3_tr)
+
+# Test
+print("Test")
+r_accur_nnet3_te=get_nnet(nnet_rating,x_test)
+sprintf("%s %.5f","Test Accuracy",r_accur_nnet3_te)
+
+plotnet(nnet_rating)
+stopImplicitCluster()
+```
+当てはまりは，他とくらべてまぁまぁである．
+
+`r sprintf("ユニット数3 Accuracy Rate : Training %.4f Test %.4f",r_accur_nnet1_tr,r_accur_nnet1_te)`
+
+`r sprintf("ユニット数10 Accuracy Rate : Training %.4f Test %.4f",r_accur_nnet2_tr,r_accur_nnet2_te)`
+
+`r sprintf("ユニット数30 Accuracy Rate : Training %.4f Test %.4f",r_accur_nnet3_tr,r_accur_nnet3_te)`
+
+トレーニング・データが小さいので，size=35でも大丈夫だったが，size=40にすると推定するパラメターの数が多すぎてエラーとなる．
+
+Unitの数を増やしても，まったく成績が良くならない．選んでいる特徴変数がよくないからだろう．
+
+## 隠れ層を増やせるディープ??・ニューラル・ネットワーク
+
+```{r}
+#| label: Neural_network_rating_4
+registerDoParallel(cores=detectCores())
+
+f=(rating=="A")+(rating=="AA")+(rating=="AAA")+(rating=="BBB")+(rating=="BB") ~ PER+PBR+ROE+ROA+PCFR+EVperEBIT+ICR+SP02+SP03+SP04+SP06+SP07+SP08+SP09+SP10
+label_cls=c("A","AA","AAA","BBB","BB")
+
+get_confusion<-function(NN_model,x_data,name_cls){
+  pred=predict(NN_model,x_data)
+  pred_cls=name_cls[apply(pred,1,which.max)]
+  conf_tbl=table(x_data$rating, pred_cls)
+  r_accuracy=sum(pred_cls==x_data$rating)/length(pred_cls)
+  print(conf_tbl)
+  sprintf("%s = %.5f","Accuracy",r_accuracy)
+}
+
+#
+# Default neuralnet
+# Training
+nn_01 <- neuralnet(formula=f, data=x_train)
+pred_rating=colnames(nn_01$response)
+pred_rating=gsub("rating == \"","",pred_rating)
+pred_rating=gsub("\"","",pred_rating)
+
+print("Training")
+get_confusion(nn_01,x_train,label_cls)
+
+# Test
+print("Test")
+get_confusion(nn_01,x_test,label_cls)
+
+plot(nn_01)
+
+#
+# hidden layers 3,3
+#
+nn_02 <- neuralnet(formula=f, data=x_train, stepmax=1e7, hidden = c(3,3) )
+
+# Training
+print("Training")
+get_confusion(nn_02,x_train,label_cls)
+
+# Test
+print("Test")
+get_confusion(nn_02,x_test,label_cls)
+
+plot(nn_02)
+```
+
+# hidden layers 4
+以下の部分はパソコンのメモリ・サイズやスピードなど性能によっていつまで待ってもできなかったりするので，やってみたい人だけが実行してみること．
+すぐに終わらなかったら，この後全て削除してから，render/knitすること．
+
+```{r}
+#| label: Neural_network_rating_5
+
+nn_04 <- neuralnet(formula=f, data=x_train, linear.output=FALSE, stepmax = 1e7, hidden=c(10,6,5,5))
+
+# Training
+print("Training")
+get_confusion(nn_04,x_train,label_cls)
+
+# Test
+print("Test")
+get_confusion(nn_04,x_test,label_cls)
+
+plot(nn_04)
+
+stopImplicitCluster()
+print(Sys.time())
+```
+結果，単層の全然改善されない．
+
+他にも多くのニューラル・ネットワークのpackageが利用できる．
+
+https://www.inmodelia.com/exemples/2021-0103-RJournal-SM-AV-CD-PK-JN.pdf
+
+参照．
+しかし，とりあえずkeras-tensorflow, keras-torch を使うことをおぼえた方が良いだろう，
+mxnetもあるが，最近ちょっと使いにくくなった．

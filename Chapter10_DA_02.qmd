@@ -1,0 +1,141 @@
+---
+title: "第10章"
+author: "早見　均"
+format: docx
+editor: source
+---
+
+## 実行に必要な準備
+
+```{r}
+#| label: setup
+#| echo: FALSE
+local({r<-getOption("repos"); r["CRAN"] <- "https://cloud.r-project.org"; options(repos=r)})
+lib_required=c("knitr","rmarkdown","stargazer")
+id=lib_required %in% rownames(installed.packages())
+install.packages(lib_required[!id],dependencies=TRUE)
+for( pkg in lib_required ) library(pkg,character.only=T)
+
+knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv(TZ='Japan')
+op <- options(digits.secs = 6)
+Sys.time()
+options(digits=4)
+```
+
+```{r}
+ytmp=read.table('https://hastie.su.domains/ElemStatLearn/datasets/radsens.y',fill=T,header=F)
+ytt=c(ytmp[1,],ytmp[2,])
+yt=unlist(ytt)
+yt=na.omit(yt)
+y=as.vector(ytt)
+(n_y=length(y))
+
+# n_ytmp=length(ytmp)
+# y=NULL
+# for( i in 1:n_ytmp){
+#   tmp=strsplit(ytmp[[i]],' ')
+#   y_tmp=as.numeric(tmp[[1]])
+#   y=c(y,y_tmp)
+# }
+# y=na.omit(y)
+# (n_y=length(y))
+
+xtmp=read.table('https://hastie.su.domains/ElemStatLearn/datasets/radsens.x',header=F)
+
+# n_xtmp=length(xtmp)
+
+# x_t=y
+# for( j in 1:n_xtmp){
+#   tmp=strsplit(xtmp[[j]],' ')
+#   x_tmp=as.numeric(tmp[[1]])
+#   x_tmp=na.omit(x_tmp)
+#   x_t=rbind(x_t,x_tmp)
+# }
+```
+
+```{r}
+x_t=rbind(y,xtmp)
+n_X=dim(x_t)[1]
+x=as.matrix(x_t[2:n_X,],ncol=n_y)
+
+n_x=dim(x)[1]
+p_V=NULL
+t_V=NULL
+for( j in 1:n_x){
+  t_res=t.test(x[j,1:44],x[j,45:58])
+  p_V=c(p_V,t_res$p.value)
+  t_V=c(t_V,t_res$statistic)
+}
+p_Vs=sort(p_V)
+
+xhist=hist(t_V,nclass=75,probability = TRUE,main='',xlab='t-value'
+           ,xlim=c(-5,5),ylim=c(0,0.4))
+curve(dt(x,df=46),from=-5,to=5,n=10000,col=1,add=TRUE,lwd=3,lty=4)
+xd=density(t_V)
+lines(xd$x,xd$y,col=4,lwd=3)
+
+c(min(t_V),max(t_V))
+id_sig=which(abs(t_V)>qt(0.975,df=46))
+length(id_sig)
+```
+
+# Hastieの例の再現
+
+```{r fig1501}
+data_file="https://web.stanford.edu/~hastie/CASI_files/DATA/prostz.txt"
+x=read.table(data_file,header=FALSE)
+x=unlist(x)
+
+# brks=seq(-4.5,5.4,0.15)
+# brks=seq(-4.5,5.4,0.18)
+brks=seq(-4.5,5.3,0.2)
+H=hist(x,breaks=brks,plot=FALSE)
+
+sum_density=sum(H$density)
+sum_counts=sum(H$counts)
+scale_x=sum_counts/sum_density
+
+# normal N(0,1) scaled by counts
+z=seq(-4.5,5.4,0.01)
+Z=data.frame(z=z)
+s=1
+phi=exp(-(z)**2/(2*s**2))/sqrt(2*pi*s**2)*scale_x
+
+# kernel density estimation
+fX_y=density(x)$y*scale_x
+fX_x=density(x)$x
+
+hist(x,breaks=brks,xlab="z-values",ylab="Counts",ylim=c(0,500),main="")
+lines(fX_x,fX_y,col=4,lwd=3)
+lines(z,phi,col=2,lwd=3)
+```
+
+定理：Benjamini-Hochberg FDR コントロール
+
+もし成立している帰無仮説に対応する$p-$値が，お互いに独立であるならば， \[ \textrm{FDR}(\mathcal{D}\_q)=\pi\_0{q}{\le}q,\quad \textrm{where } \pi\_0=N_0/N \tag{1} \] いいかえると，$\mathcal{D}_q$は，level $\pi_0{q}$でFDRをコントロールしている． 帰無仮説の割合$\pi_0$は未知である(推定は可能である)． そのため．通常は$\mathcal{D}_q$はlevel ${q}$でFDRをコントロールしているという． 大規模検定の問題では，ほとんどの場合が帰無である場合に探している，つまり$\pi_0$が1に近い状況なので，そんなに多くは失われないのである． $\pi_0$が1に近いとは，少ない個数の帰無ではないものを見つけるのが目的であることを示している． $q=1$というのが典型的な現状の選択である．
+
+FDRコントロールの人気は，有意性をいうのにFWERよりもずっと寛容だからという事実に依存している．帰無ではない場合を示すのに「有意」という古典的な用語は，FDRコントロールの場合には正しくはない．FDRコントロール，とくにベイジアンの関係のものでは，適切ではなく，有意ではなく「興味ぶかいinteresting」という用語を使う．
+
+Holmの手続きでは，つぎの不等号が成立するときに帰無仮説H$_{0(i)}$を棄却する． \[ p\_{(i)}{\le}\textrm{Threshold(Holm's)} = \frac{\alpha}{N-i+1} \tag{2} \] $\mathcal{D}_q$はつぎの境界となる \[ p\_{(i)}{\le}\textrm{Threshold($\mathcal{D}_q$)} = \frac{q}{N}i \tag{3} \] 関心のある通常の領域では，つまり大きな$N$と小さな$i$では，つぎの比は，$i$が大きくなると線形で大きくなる． \[ \frac{\textrm{Threshold($\mathcal{D}_q$)}}{\textrm{Threshold(Holm's)}} = \frac{q}{\alpha}\left( 1-\frac{i-1}{N} \right)i \tag{4} \]
+
+```{r fig1503}
+N=length(x)
+zi=sort(x,decreasing=TRUE)
+pv=1-pnorm(zi)
+
+iv=1:50
+
+alpha=0.1
+Holm=alpha/(N-iv+1)
+
+q=0.1
+FDR=(q/N)*iv
+
+plot(iv,pv[iv],cex=.3,col=4,pch=8,ylab="p-value",xlab="index i",main="")
+lines(iv,FDR,col=2)
+lines(iv,Holm,col=3)
+text(48,0.00073,"FDR",col=2)
+text(28,0.00038,"i=28",col=2)
+text(06,-0.00002,"i=6",col=2)
+```

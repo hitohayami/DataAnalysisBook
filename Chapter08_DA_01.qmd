@@ -1,0 +1,120 @@
+---
+title: "第8章"
+subtitle: "MNIST by keras using R"
+format: docx
+editor: source
+always_allow_html: true
+---
+
+## 準備
+
+Macのパソコンを使っている人は，mnist.npzのファイルがダウンロードできないみたいなので，ファイルを添付しています．普通にダウンロードできる場合は不要です．
+
+インストールし終わったら計算は3分以内くらいだとおもいます．それで，6万枚の画像を学習に使って，1万枚の画像をテスト用に使っています．
+Viewerに学習の様子が表示されるので，実行中は右下のウィンドウをViewerにしておくと少しは動きがあります．
+
+```{r}
+#| label: Setup_python
+lib_required=c("knitr","rmarkdown","keras3","reticulate")
+id=lib_required %in% rownames(installed.packages())
+Sys.time()
+options(repos="https://cloud.r-project.org",install.packages.check.source = "no")
+# update.packages()
+if( length(id)>0 ){ 
+  install.packages(lib_required[!id],dependencies=TRUE,repos="https://cloud.r-project.org",)
+  }
+for( pkg in lib_required ) require(pkg,character.only=T)
+# install_python(version='3.12.10')
+# use_python_version("3.12.10")
+# repl_python(input="!pip install --upgrade --quiet pip")
+# repl_python(input="!pip install -U --quiet tensorflow")
+library(tensorflow)
+# install_tensorflow()
+```
+
+```{r}
+#| label: Setup_Data
+mnist <- dataset_mnist()
+
+x_train <- mnist$train$x; y_train <- mnist$train$y
+x_test <- mnist$test$x; y_test <- mnist$test$y
+
+# 変形・リスケール
+x_train <- array_reshape(x_train, c(nrow(x_train),784))
+x_test <- array_reshape(x_test, c(nrow(x_test), 784))
+x_train <- x_train / 255; x_test <- x_test / 255
+y_train <- to_categorical(x = y_train)
+y_test  <- to_categorical(x = y_test)
+```
+
+```{r}
+#| label: Define_Model_and_Layers
+# モデルと層の定義
+model <- keras_model_sequential(input_shape = c(784))
+
+# 2. 層の追加（最初に layer_input を置く）
+model %>% 
+  layer_dense(units = 256, activation = 'relu') %>%
+  layer_dropout(rate = 0.4) %>%
+  layer_dense(units = 128, activation = 'relu') %>%
+  layer_dense(units = 10, activation = 'softmax')
+
+# 確認
+summary(model)
+
+# コンパイル (損失関数とオプティマイザの定義)
+model %>% compile( loss ='categorical_crossentropy',
+  optimizer = optimizer_adam(),
+  metrics = c('accuracy')
+)
+```
+
+```{r}
+#| label: Fitting_Models
+#| results: 'hide'
+# 学習 (フィッティング)
+fitted_history <- model %>% fit(
+  x_train, y_train,
+  epochs = 30, batch_size = 128,
+  validation_split = 0.2
+)
+
+plot(fitted_history)
+
+model %>% evaluate(x_train, y_train)
+model %>% evaluate(x_test, y_test)
+Sys.time()
+```
+
+```{r}
+#| label: final_result
+res_train<-predict(model,x_train)
+res_test<-predict(model,x_test)
+dim(res_test)
+```
+
+```{r}
+#| label: View_Results
+# 1カラム目は0
+yh_train<-apply(res_train,1,which.max)-1
+yh_test<-apply(res_test,1,which.max)-1
+yl_train<-apply(y_train,1,which.max)-1
+yl_test<-apply(y_test,1,which.max)-1
+(conti_train=table(yl_train,yh_train))
+(conti_test=table(yl_test,yh_test))
+
+par(mfcol=c(6,6))
+par(mar=c(0, 0, 3, 0), xaxs='i', yaxs='i')
+for (idx in 109:144) { 
+    im <- mnist$train$x[idx,,]
+    im <- t(apply(im, 2, rev)) 
+    image(1:28, 1:28, im, col=gray((0:255)/255), 
+          xaxt='n', main=paste(mnist$train$y[idx],yh_train[idx],sep=";"))
+}
+
+ratio_train=sum(diag(conti_train))/sum(conti_train)
+ratio_test=sum(diag(conti_test))/sum(conti_test)
+print(c("Training Accuracy=",ratio_train,",  Test Accuracy=",ratio_test))
+
+Sys.time()
+```

@@ -1,0 +1,185 @@
+---
+title: "第10章 p-ハッキング"
+author: "早見　均"
+format: docx
+editor: visual
+---
+
+## 実行に必要な準備
+
+```{r}
+#| label: setup
+#| echo: FALSE
+local({r<-getOption("repos"); r["CRAN"] <- "https://cloud.r-project.org"; options(repos=r)})
+lib_required=c("knitr","rmarkdown")
+id=lib_required %in% rownames(installed.packages())
+install.packages(lib_required[!id],dependencies=TRUE)
+for( pkg in lib_required ) library(pkg,character.only=T)
+
+knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv(TZ='Japan')
+op <- options(digits.secs = 6)
+Sys.time()
+options(digits=4)
+```
+
+## p-値ハッキングの方法1: サンプル・サイズが大きい場合
+
+とりあえず，いわゆるp-値ハッキングをやろう．
+
+データを使った論文を書いているほとんどみんながやっている悪いクセ． なくならない限り，false discovery の山が築き上げられていく．
+
+```{r Regression_Parameters_Hypothesis_Test1}
+set.seed(883)
+m=20
+n=10000
+
+sim<-function(n,m){
+  X=NULL
+  mu=runif(m)
+  sig=runif(m)
+  for( i in 1:m ){
+    X=append(X,rnorm(n,mean=mu[i],sd=sig[i]))
+  }
+  X=matrix(X,nrow=n,ncol=m)
+  y=rnorm(n)
+  reg=lm(y~X-1)
+  summary(reg)
+  tp=cbind(summary(reg)$coefficients[,3],summary(reg)$coefficients[,4])
+  tp=data.frame(tv=tp[,1],pv=tp[,2])
+  return(tp)
+ }
+
+n_sim=1000
+tv=NULL; pv=NULL
+for( k in 1:n_sim ){
+  tp=sim(n,m)
+  tv=append(tv,tp$tv)
+  pv=append(pv,tp$pv)
+}
+
+ndf=n-m
+hist(tv,nclass=50,main="",xlab="parameters' distribution of t-values")
+abline(v=qt(0.025,df=ndf),col=2)
+abline(v=qt(0.975,df=ndf),col=2)
+sum(abs(tv)>qt(0.975,df=ndf))
+sum(abs(tv)>qt(0.975,df=ndf))/length(tv)
+
+hist(pv,nclass=50,xlab="Parameters' distribution of p-values",main="")
+abline(v=0.05,col=2)
+sum(pv<0.05)
+sum(abs(pv)<=0.05)/length(pv)
+```
+
+## p-値ハッキングの方法2: サンプル・サイズが比較的小さい(n=25)
+
+説明変数の数を増やすと，統計的に有意に計算されるパラメターの数も比例的に増加する． あたりまえ．
+
+```{r Regression_Parameters_Hypothesis_Test2}
+set.seed(883)
+
+# サンプル・サイズ
+n=25
+
+# 説明変数の数
+m=1
+b=rep(0,m)
+
+# シミュレーション回数
+n_sim=1000
+tv=NULL; pv=NULL
+for( k in 1:n_sim ){
+  tp=sim(n,m)
+  tv=append(tv,tp$tv)
+  pv=append(pv,tp$pv)
+}
+
+ndf=n-(m+1)
+hist(tv,nclass=50,main="",xlab="parameters' distribution of t-values m=1")
+abline(v=qt(0.025,df=ndf),col=2)
+abline(v=qt(0.975,df=ndf),col=2)
+sum(abs(tv)>qt(0.975,df=ndf))
+sum(abs(tv)>qt(0.975,df=ndf))/length(tv)
+
+hist(pv,nclass=50,xlab="Parameters' distribution of p-values m=1",main="")
+abline(v=0.05,col=2)
+sum(pv<0.05)
+sum(abs(pv)<=0.05)/length(pv)
+
+# 説明変数の数
+m=5
+b=rep(0,m)
+
+# シミュレーション回数
+n_sim=1000
+tv=NULL; pv=NULL
+for( k in 1:n_sim ){
+  tp=sim(n,m)
+  tv=append(tv,tp$tv)
+  pv=append(pv,tp$pv)
+}
+
+ndf=n-(m+1)
+hist(tv,nclass=50,main="",xlab="parameters' distribution of t-values m=5")
+abline(v=qt(0.025,df=ndf),col=2)
+abline(v=qt(0.975,df=ndf),col=2)
+sum(abs(tv)>qt(0.975,df=ndf))
+sum(abs(tv)>qt(0.975,df=ndf))/length(tv)
+
+hist(pv,nclass=50,xlab="Parameters' distribution of p-values m=5",main="")
+abline(v=0.05,col=2)
+sum(pv<0.05)
+sum(abs(pv)<=0.05)/length(pv)
+
+# 説明変数の数
+m=10
+b=rep(0,m)
+
+# シミュレーション回数
+n_sim=1000
+tv=NULL; pv=NULL
+for( k in 1:n_sim ){
+  tp=sim(n,m)
+  tv=append(tv,tp$tv)
+  pv=append(pv,tp$pv)
+}
+
+ndf=n-(m+1)
+hist(tv,nclass=50,main="",xlab="parameters' distribution of t-values m=10")
+abline(v=qt(0.025,df=ndf),col=2)
+abline(v=qt(0.975,df=ndf),col=2)
+sum(abs(tv)>qt(0.975,df=ndf))
+sum(abs(tv)>qt(0.975,df=ndf))/length(tv)
+
+hist(pv,nclass=50,xlab="Parameters' distribution of p-values m=10",main="")
+abline(v=0.05,col=2)
+sum(pv<0.05)
+sum(abs(pv)<=0.05)/length(pv)
+
+# 説明変数の数
+n=1000
+m=100
+b=rep(0,m)
+
+# シミュレーション回数
+n_sim=1000
+tv=NULL; pv=NULL
+for( k in 1:n_sim ){
+  tp=sim(n,m)
+  tv=append(tv,tp$tv)
+  pv=append(pv,tp$pv)
+}
+
+# par(mfrow=c(1,2))
+ndf=n-(m+1)
+hist(tv,nclass=50,main="",xlab="parameters' distribution of t-values m=100, n=1000")
+abline(v=qt(0.025,df=ndf),col=2)
+abline(v=qt(0.975,df=ndf),col=2)
+sum(abs(tv)>qt(0.975,df=ndf))
+sum(abs(tv)>qt(0.975,df=ndf))/length(tv)
+
+hist(pv,nclass=50,xlab="Parameters' distribution of p-values m=100, n=1000",main="")
+abline(v=0.05,col=2)
+sum(pv<0.05)
+sum(abs(pv)<=0.05)/length(pv)
+```

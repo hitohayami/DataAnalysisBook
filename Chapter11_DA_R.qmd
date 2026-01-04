@@ -1,0 +1,181 @@
+---
+title: "第11章"
+subtitle: "量子コンピュータ・シミュレータ R"
+format: docx
+editor: visual
+---
+
+```{r}
+#| label: SimulateRの準備
+library("qsimulatR")
+x <- qstate(nbits=2)
+x
+
+CatInBox <- qstate(nbits=1, basis=c("|dead>", "|alive>"))
+CatInBox
+
+CatInBox <- qstate(nbits=1, basis=c("|dead>", "|alive>"),
+                   coefs=as.complex(c(1/sqrt(2), 1/sqrt(2))))
+CatInBox
+
+plot(x, qubitnames=c("qubit1", "qubit2"))
+```
+
+```{r}
+#| label: 2. カスタム基底名を持つ1量子ビットの状態
+# デフォルトの|0>状態を生成します。
+cat_in_box_basis = Statevector.from_int(0, 2)
+print("\n--- 1-Qubit State (|0>) ---")
+print("# |0> を |dead> と解釈します")
+print(cat_in_box_basis)
+```
+
+```{r}
+#| label: Hadamard Gate
+x <- qstate(nbits=2)
+y <- H(1) * x
+y
+plot(y)
+```
+
+```{r}
+#| label: オリジナルのゲートを作る
+myGate <- function(bit) {
+  methods::new("sqgate", bit=as.integer(bit),
+               M=array(as.complex(c(1,0,0,-1)), dim=c(2,2)),
+               type="myGate")
+}
+z <- myGate(1) * y
+z
+plot(z)
+
+＃CNOT
+truth.table(X, 1)
+truth.table(CNOT, 2)
+z <- CNOT(c(1,2)) * y
+z
+plot(z)
+
+＃ Gate
+CX12 <- cqgate(bits=c(1L, 2L), gate=X(2L))
+z <- CX12 * y
+z
+z <- SWAP(c(1,2)) * y
+z
+plot(z)
+z <- SWAP(c(2,1)) * y
+z
+x <- H(1) *(H(2) * qstate(3))
+x
+y <- CCNOT(c(1,2,3)) * x
+y
+plot(y)
+
+y <- CSWAP(c(1,2,3)) * x
+y
+plot(y)
+```
+
+```{r}
+#| label: 複数のGates
+myswap <- function(bits){
+    function(x){
+        CNOT(bits) * (CNOT(rev(bits)) * (CNOT(bits) * x))
+    }
+}
+truth.table(myswap, 2)
+circuit <- myswap(1:2)
+plot(circuit(qstate(2)))
+
+# measure
+res <- measure(y, 1)
+summary(res)
+plot(res$psi)
+rv <- measure(y, 3, rep=10000)$value
+hist(rv, freq=FALSE, main="Probability for Qubit 3")
+```
+
+### 量子フーリエ変換
+
+```{r QFT}
+y <- qstate(3)
+y <- qft(y, inverse=FALSE)
+plot(y)
+y <- qstate(4)
+y <- qft(y, inverse=FALSE)
+plot(y)
+
+cnotwrapper <- function(c, j, x, k) {
+  if(j == 1) return(CNOT(c(c, k)) * x)
+  return(Id(k) * x)
+}
+
+x <- H(1) * qstate(3)
+x <- phase_estimation(bitmask=c(2:3), FUN=cnotwrapper, x=x, k=1)
+x
+plot(x)
+
+x <- H(1) * (X(1) * qstate(3))
+x <- phase_estimation(bitmask=c(2:3), FUN=cnotwrapper, x=x, k=1)
+x
+plot(x)
+```
+
+### Groverのアルゴリズム
+
+```{r Grover}
+## oracle for n=2 and x_s=2
+oracle <- function(x) {
+  x <- X(1) * (CCNOT(c(1,2,3)) *(X(1) * x))
+  return(x)
+}
+
+## case |00>=0
+x <- oracle(qstate(3))
+measure(x, 3)$value
+plot(x)
+
+## case |01>=1
+x <- oracle(X(1)*qstate(3))
+measure(x, 3)$value
+plot(x)
+
+## case |10>=2
+x <- oracle(X(2)*qstate(3))
+measure(x, 3)$value
+plot(x)
+
+## case |11>=3
+x <- oracle(X(2)*(X(1)*qstate(3)))
+measure(x, 3)$value
+plot(x)
+
+U <- function(x) {
+  x <- oracle(x)
+  x <- Z(3) * x
+  x <- oracle(x)
+  return(x)
+}
+V <- function(x) {
+  for(i in c(1:2)) {
+    x <- H(i) * x
+  }
+  x <- X(1) * (X(2) * x)
+  x <- CCNOT(c(1,2,3)) * x
+  x <- Z(3) * x
+  x <- CCNOT(c(1,2,3)) * x
+  x <- X(1) * (X(2) * x)
+  for(i in c(1:2)) {
+    x <- H(i) * x
+  }
+  return(x)
+}
+## prepare psi
+psi <- H(1) * ( H(2) * qstate(3))
+## apply VU
+x <- U(psi)
+plot(x)
+x <- V(x)
+x
+plot(x)
+```

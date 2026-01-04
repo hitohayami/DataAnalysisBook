@@ -1,0 +1,100 @@
+---
+title: "Transformersプログラム"
+format: html
+editor: source
+---
+
+## Pytorch
+
+```{python}
+import torch
+from transformers import pipeline
+text="""Dear Amazon, last week I ordered an Optimus Prime action figure from your online store in Japan. Unfortunately, when I opened the package, I discovered to my horror that I had been sent an action figure of Megatron instead!  As a lifelong enemy of the Decepticons, I hope you can understand my dilemma. To resolve the issue, I demand an exchange of Megatron for the Optimus Prime figure I ordered.  Enclosed are copies of my records concerning this purchase. I expect to hear from you soon. Sincerely, Bumplebee."""
+import pandas as pd
+class_model = pipeline("text-classification")
+outputs=class_model(text)
+pd.DataFrame(outputs)
+```
+
+```{python}
+import torch
+from diffusers import DiffusionPipeline # モジュールのインポート
+pipe = DiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5") # Diffusion モデルを指定する
+pipe = pipe.to("mps") # M1 Mac の GPU を指定する
+pipe.enable_attention_slicing() # RAM が 64 GB 未満の場合はこの一行を入れるとよい
+prompt = "a photo of an astronaut riding a horse on mars" # 生成プロンプト
+image = pipe(prompt).images[0] # 画像生成
+image.save('output.jpg') # 画像保存
+```
+
+```{python}
+import torch
+from transformers import AutoModelForSequenceClassification
+from transformers import TFAutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoConfig
+import numpy as np
+from scipy.special import softmax
+# Preprocess text (username and link placeholders)
+def preprocess(text):
+    new_text = []
+    for t in text.split(" "):
+        t = '@user' if t.startswith('@') and len(t) > 1 else t
+        t = 'http' if t.startswith('http') else t
+        new_text.append(t)
+    return " ".join(new_text)
+MODEL = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+tokenizer = AutoTokenizer.from_pretrained(MODEL)
+config = AutoConfig.from_pretrained(MODEL)
+# PT
+model = AutoModelForSequenceClassification.from_pretrained(MODEL)
+#model.save_pretrained(MODEL)
+text = "Covid cases are increasing fast!"
+text = preprocess(text)
+encoded_input = tokenizer(text, return_tensors='pt')
+output = model(**encoded_input)
+scores = output[0][0].detach().numpy()
+scores = softmax(scores)
+# # TF
+# model = TFAutoModelForSequenceClassification.from_pretrained(MODEL)
+# model.save_pretrained(MODEL)
+# text = "Covid cases are increasing fast!"
+# encoded_input = tokenizer(text, return_tensors='tf')
+# output = model(encoded_input)
+# scores = output[0][0].numpy()
+# scores = softmax(scores)
+# Print labels and scores
+ranking = np.argsort(scores)
+ranking = ranking[::-1]
+for i in range(scores.shape[0]):
+    l = config.id2label[ranking[i]]
+    s = scores[ranking[i]]
+    print(f"{i+1}) {l} {np.round(float(s), 4)}")
+
+```
+
+```{python}
+import torch
+from diffusers import DiffusionPipeline
+
+pipe = DiffusionPipeline.from_pretrained(
+    "cagliostrolab/animagine-xl-3.1", 
+    torch_dtype=torch.float16, 
+    use_safetensors=True, 
+)
+
+pipe.to('mps')
+
+prompt = "1girl, souryuu asuka langley, neon genesis evangelion, solo, upper body, v, smile, looking at viewer, outdoors, night"
+negative_prompt = "nsfw, lowres, (bad), text, error, fewer, extra, missing, worst quality, jpeg artifacts, low quality, watermark, unfinished, displeasing, oldest, early, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]"
+
+image = pipe(
+    prompt, 
+    negative_prompt=negative_prompt,
+    width=832,
+    height=1216, 
+    guidance_scale=7,
+    num_inference_steps=28
+).images[0]
+
+image.save("asuka_test.png")
+```

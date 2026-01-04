@@ -1,0 +1,133 @@
+---
+title: "第10章 local fdr"
+author: "早見　均"
+format: docx
+editor: source
+---
+
+## 実行に必要な準備
+
+```{r}
+#| label: setup
+#| echo: FALSE
+local({r<-getOption("repos"); r["CRAN"] <- "https://cloud.r-project.org"; options(repos=r)})
+lib_required=c("knitr","rmarkdown","BiocManager","locfdr")
+id=lib_required %in% rownames(installed.packages())
+install.packages(lib_required[!id],dependencies=TRUE)
+for( pkg in lib_required ) library(pkg,character.only=T)
+
+knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv(TZ='Japan')
+op <- options(digits.secs = 6)
+Sys.time()
+options(digits=4)
+```
+```{r}
+#| label: FDR_cancer_mean
+library(dplyr)
+library(ggplot2)
+
+install.packages("BiocManager")
+BiocManager::install("GEOquery")
+BiocManager::install("limma")
+library(GEOquery)
+library(limma)
+
+gse <- getGEO("GSE1725", GSEMatrix = FALSE)
+n=length(gse@gsms[])
+n_DNA=dim(gse@gsms[[1]]@dataTable@table[])[1]
+
+gse@gsms[[1]]@dataTable@table[1,]
+gse@gsms[[n]]@dataTable@table[1,]
+
+gsm_obj <- gse@gsms[[1]]
+gsm_obj@dataTable@table[1:20,]
+
+i_P=gse@gsms[[1]]@dataTable@table[1:n_DNA,'ABS_CALL']=='P'
+i_A=gse@gsms[[1]]@dataTable@table[1:n_DNA,'ABS_CALL']=='A'
+i_M=gse@gsms[[1]]@dataTable@table[1:n_DNA,'ABS_CALL']=='M'
+
+n_DNA
+sum(i_P)+sum(i_A)+sum(i_M)
+
+# treatment controlの区別
+UVIRMock=sapply(gse@gsms, function(x) x@header$title)
+n_UV=length(UVIRMock)
+i_Mock=0
+i_IR=0
+i_UV=0
+i_CT=vector(length=n_UV)
+for( i in 1:n_UV){
+   c_K=strsplit(UVIRMock[i],'-')[[1]][2]
+  if( c_K=="Mock" ){
+    i_Mock=i_Mock+1
+    i_CT[i]=0
+   }
+  if( c_K=="IR" ) {
+    i_IR=i_IR+1
+    i_CT[i]=1
+   }
+  if( c_K=="UV" ) {
+    i_UV=i_UV+1
+    i_CT[i]=2
+  }
+}
+i_Mock;i_IR;i_UV
+
+# 最初のサンプル（GSM）のメタデータを表示
+head(gse@gsms[[1]]@header)
+# もしくは、さらに詳細なcharacteristics_ch1を見る
+gse@gsms[[2]]@header$channel_count
+
+i_A=0
+i_P=0
+for( i in 1:n ){
+  ABS=gse@gsms[[i]]@dataTable@table[2,'ABS_CALL']
+  if( ABS=="A"){
+    i_A=i_A+1
+  } else if(ABS=="P"){
+    i_P=i_P+1
+  }
+}
+
+j_AllP=vector(length=n_DNA)
+for( j in 1:n_DNA){
+    j_chk=1
+    for( i in 1:n){
+      if( gse@gsms[[i]]@dataTable@table[j,'ABS_CALL'] == 'P' ) { j_chk=j_chk*1 } else { j_chk=0 } 
+    }
+    j_AllP[j]=j_chk
+}
+
+Xd=list()
+for( i in 1:n){
+  Xd[[i]]=gse@gsms[[i]]@dataTable@table[which(j_AllP==1),]
+}
+
+group <- factor(i_CT)
+design <- model.matrix(~0+group)
+colnames(design) <- c('IR', 'Mock', 'UV')
+
+Xd_Mock=Xd[i_CT==0]
+Xd_IR=Xd[i_CT==1]
+Xd_UV=Xd[i_CT==2]
+
+n_Xd=length(Xd_Mock[[1]][,'VALUE'])
+p_MockIR=vector(length=n_Xd)
+p_MockUV=vector(length=n_Xd)
+p_IRUV=vector(length=n_Xd)
+t_MockIR=vector(length=n_Xd)
+t_MockUV=vector(length=n_Xd)
+t_IRUV=vector(length=n_Xd)
+for( i in 1:n_Xd){
+  X_Mc=sapply(1:57, function(k) {Xd_Mock[[k]][i,'VALUE']})
+  X_IR=sapply(1:57, function(k) {Xd_IR[[k]][i,'VALUE']})
+  X_UV=sapply(1:57, function(k) {Xd_UV[[k]][i,'VALUE']})
+  tmp=t.test(X_Mc,X_IR)
+  p_MockIR[i]=tmp$p.value; t_MockIR[i]=tmp$statistic
+  tmp=t.test(X_Mc,X_UV)
+  p_MockUV[i]=tmp$p.value; t_MockUV[i]=tmp$statistic
+  tmp=t.test(X_IR,X_UV)
+  p_IRUV[i]=tmp$p.value;  t_IRUV[i]=tmp$statistic
+}
+```
