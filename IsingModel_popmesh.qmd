@@ -1,0 +1,137 @@
+---
+title: "Ising Model on Population Mesh Data"
+format: docx
+---
+
+```{python}
+import geopandas as gpd
+import libpysal
+import networkx as nx
+import numpy as np
+import matplotlib.pyplot as plt
+
+# 1. Shapefileの読み込み (例: 都道府県や市区町村のポリゴン)
+# 自分のファイルパスに置き換えてください
+# /Users/hitoshihayami/Documents
+# gdf = gpd.read_file("/Users/hitoshihayami/Documents/250m_mesh_2024_01_SHP/250m_mesh_2024_01.shp")
+gdf = gpd.read_file("/Users/hitoshihayami/Documents/250m_mesh_2024_13_SHP/250m_mesh_2024_13.shp")
+
+# 2. 隣接関係（空間重み）の抽出
+# Queen隣接（頂点または辺を共有）でグラフを作成
+w = libpysal.weights.Queen.from_dataframe(gdf)
+adj_graph = w.to_networkx()
+
+# 3. イジングモデルの設定
+pop_diff = gdf['PT00_2030'] - gdf['PT00_2025']
+
+num_sites = len(gdf)
+# 0以上 (pop_diff >= 0) なら 1
+# 0未満 (マイナス) なら -1
+spins = np.where(pop_diff >= 0, 1, -1)
+
+# (任意) 結果をgdfに保存して確認
+gdf['spins'] = spins
+print(gdf['PT00_2030'].head(), gdf['PT00_2025'].head(), gdf['spins'].head())
+
+J = 1.0  # 相互作用係数 (正なら強磁性：周囲と同じになりやすい)
+
+# 4. エネルギー計算関数の例
+def calculate_energy(spins, adj_graph, J):
+    energy = 0
+    for i, j in adj_graph.edges():
+        energy -= J * spins[i] * spins[j]
+    return energy
+
+# 5. 可視化 (現在のスピン状態を地図に塗る)
+gdf['spin'] = spins
+limit = max(abs(gdf['spin'].min()), abs(gdf['spin'].max()))
+
+ax = gdf.plot(column='spin', cmap='RdBu', vmin=-limit, vmax=limit, legend=True)
+
+# 23区付近にズームするための座標範囲設定 (WGS84 経緯度の場合)
+ax.set_xlim(138.9, 140.0)  # 経度 (西端, 東端)
+ax.set_ylim(35.5, 35.9)    # 緯度 (南端, 北端)
+plt.title(f"Initial Ising State (Energy: {calculate_energy(spins, adj_graph, J):.2f})")
+
+plt.show()
+```
+
+```{python}
+import libpysal
+from scipy.sparse import csr_matrix
+
+# 1. Queen隣接（頂点または辺を共有）で重みを作成
+# gdfは前段で読み込んだGeoDataFrame
+w = libpysal.weights.Queen.from_dataframe(gdf)
+
+# 2. 疎行列 (CSR形式) に変換
+# sparse_adj は scipy.sparse.csr_matrix 型になります
+sparse_adj = w.to_sparse()
+
+# 3. 必要に応じて値を調整
+# 通常、隣接行列は 1 or 0 なので、Jを掛けて相互作用行列にします
+J = 1.0
+interaction_matrix = sparse_adj * J
+```
+
+```{python}
+import libpysal
+import numpy as np
+from scipy.sparse import csr_matrix
+
+# 1. 隣接行列を疎行列として作成
+w = libpysal.weights.Queen.from_dataframe(gdf)
+# バイナリ形式（0 or 1）であることを確認
+w.transform = 'B' 
+adj_sparse = w.to_sparse()  # scipy.sparse.csr_matrix
+
+# 2. パラメータ設定
+n_sites = len(gdf)
+spins = np.random.choice([-1, 1], size=n_sites).astype(float)
+J = 1.0  # 相互作用定数
+T = 2.0  # 温度
+
+# 3. 疎行列を使ったエネルギー計算 (ハミルトニアン)
+# E = -J * sum(s_i * s_j)
+def calculate_total_energy(spins, adj_sparse, J):
+    # adj_sparse.dot(spins) は各サイトの「隣接スピンの合計」を一括計算する
+    neighbor_sum = adj_sparse.dot(spins)
+    # 各スピンとその隣接和の積の総和をとる（2度数え上げるので2で割る）
+    total_energy = -0.5 * J * np.sum(spins * neighbor_sum)
+    return total_energy
+
+# 4. メトロポリス法（1ステップ分）の高速化例
+def metropolis_step(spins, adj_sparse, J, T):
+    i = np.random.randint(n_sites)
+    # サイト i の隣接スピンの和を疎行列のインデックスから直接取得
+    # CSR形式なので adj_sparse[i] は非常に高速
+    # neighbor_sum = adj_sparse[i].dot(spins)[0]
+    neighbor_sum = adj_sparse[i, :].dot(spins).item()
+    # スピン反転によるエネルギー変化: dE = 2 * J * s_i * sum(s_neighbors)
+    delta_E = 2 * J * spins[i] * neighbor_sum
+    
+    # 判定
+    if delta_E <= 0 or np.random.rand() < np.exp(-delta_E / T):
+        spins[i] *= -1
+
+# 実行例
+print(f"初期エネルギー: {calculate_total_energy(spins, adj_sparse, J)}")
+for _ in range(100000):
+    metropolis_step(spins, adj_sparse, J, T)
+print(f"100000歩後のエネルギー: {calculate_total_energy(spins, adj_sparse, J)}")
+
+gdf['spin'] = spins
+```
+
+```{python}
+limit = max(abs(gdf['spin'].min()), abs(gdf['spin'].max()))
+
+ax = gdf.plot(column='spin', cmap='RdBu', vmin=-limit, vmax=limit, legend=True)
+# 23区付近にズームするための座標範囲設定 (WGS84 経緯度の場合)
+ax.set_xlim(138.9, 140.0)  # 経度 (西端, 東端)
+ax.set_ylim(35.5, 35.9)    # 緯度 (南端, 北端)
+
+plt.title(f"Final Ising State (Energy: {calculate_energy(spins, adj_graph, J):.2f})")
+
+plt.show()
+```
