@@ -51,7 +51,7 @@ tmp_dir=getwd()
 setwd(tmp_dir)
 
 get_online_shape_file<-function(this_url){
-  download.file(this_url,"tmp.zip")
+  download.file(this_url,"tmp.zip",mode="wb")
   tmp_dir=paste(getwd(),"/tmp",sep="")
   unzip("tmp.zip",exdir=tmp_dir)
   tmp_list<-dir("./tmp")
@@ -68,7 +68,7 @@ get_online_shape_file<-function(this_url){
  }
 
 get_online_shape_land_price<-function(this_url){
-  download.file(this_url,"tmp.zip")
+  download.file(this_url,"tmp.zip",mode="wb")
   shp_dir=strsplit(strsplit(this_url,".zip")[[1]],"/")[[1]][9]
   tmp_dir=paste(getwd(),"/tmp",sep="")
   unzip("tmp.zip",exdir=tmp_dir)
@@ -140,6 +140,14 @@ dland_price <- cut(x = dland_price_2024, breaks = 10)
 plot(Kanto$geometry,sub="Rate of Change in Land Prices, 2019–2024")
 plot(lp_Kanto$geometry,col=hcl.colors(n = 10, palette="Blue-Red 2")[dland_price], pch = 19, cex = .1,add=TRUE)
 
+Kanji="MS Gothic"
+RInfor=sessionInfo()$running
+if( length(grep("mac",RInfor))>0 ) {
+#  Kanji="YuMincho"
+  Kanji="HiraKakuProN-W3"
+}
+par(family=Kanji)
+
 library(ggplot2)
 
 # 1. データの準備（前述の通り）
@@ -157,7 +165,7 @@ ggplot() +
   scale_color_brewer(palette = "RdBu", direction = -1) +
   # 凡例とタイトルの設定
   labs(
-    title = "Rate of Change in Land Prices, 2019–2024",
+    title = "Rate of Change in Land Prices, 2014–2024",
     color = "" # ここで凡例のタイトルを指定
   ) +
   # 凡例の見た目の微調整
@@ -174,10 +182,23 @@ ggplot() +
     legend.background = element_rect(fill = "white", color = NA) # 凡例の背景を白に
   )
 
-theme(legend.position = "right")
 # cutせず数値のまま aes に渡す
 ggplot() +
+  geom_sf(data = Kanto, fill = NA, color = "black", alpha = 0.5) +
   geom_sf(data = lp_Kanto, aes(color = dland_price_2024), size = 0.5) +
   scale_color_distiller(palette = "RdBu", direction = -1) + # 連続値用のパレット
-  labs(color = "変動率")
+  labs(title = "Rate of Change in Land Prices, 2014–2024",color = "変動率") +
+  # 凡例の見た目の微調整
+  guides(color = guide_legend(
+    override.aes = list(size = 4), # 図上の点は小さくても、凡例の丸だけ大きくして見やすくする
+    reverse = TRUE # 必要に応じて凡例の並び順を反転
+  )) +
+  # レイアウトの設定
+  theme(
+    text = element_text(family = Kanji),
+    legend.position = "right",     # 凡例の位置（"bottom", "left", "top"も可）
+    legend.title = element_text(face = "bold"), # 凡例のタイトルを太字に
+    legend.background = element_rect(fill = "white", color = NA) # 凡例の背景を白に
+  )
+
 ```
