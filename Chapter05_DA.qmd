@@ -711,7 +711,7 @@ def CI_Clopper(n, p):
         x = np.random.binomial(n, p, 1)
         ph = x / n
         L = beta.ppf(0.025,x,n-x+1)
-        H = beta.ppf(0.975,x,n-x+1)
+        H = beta.ppf(0.975,x+1,n-x)
         id = np.where((L < p) & (p < H))[0]
         r[i] = len(id) / len(ph)
     return r
