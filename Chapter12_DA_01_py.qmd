@@ -1,0 +1,395 @@
+---
+title: "第12章第1節"
+subtitle: "株価のモデル：Python"
+author: 
+  name: "名前"
+format: docx
+jupyter: python3
+---
+
+## 感想ですかね.株価のデータですが…
+
+======= ここから．この下に書く．========
+
+======= ここまで．この下には書かない．========
+
+{{<pagebreak>}}
+
+## 実行に必要な準備
+
+```{python}
+#| label: setup
+#| echo: False
+import importlib
+import subprocess
+import sys
+
+# インストールしたいパッケージのリスト
+packages_to_install  = ["numpy", "matplotlib","certifi","requests", "scipy","jupyter","pandas","statsmodels","mplfinance","datetime", "arch", "dateutil"]
+
+def install_if_missing(package_name):
+  try:
+    importlib.import_module(package_name)
+    print(f"{package_name} は既にインストールされています。")
+  except ImportError:
+    print(f"{package_name} がインストールされていません。インストールを開始します...")
+    try:
+      subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+      print(f"{package_name} のインストールが完了しました。")
+    except subprocess.CalledProcessError as e:
+      print(f"{package_name} のインストール中にエラーが発生しました: {e}")
+
+# 各パッケージのインストール状況を確認し、必要であればインストール
+for package in packages_to_install:
+  install_if_missing(package)
+import datetime
+print(datetime.datetime.now())
+```
+
+```{python}
+#| label: import
+#| include: False
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import mplfinance as mpf
+import statsmodels.api as sm
+from statsmodels.graphics.gofplots import qqplot
+from scipy.stats import linregress
+from arch import arch_model
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+
+# Get the current system time
+current_time = datetime.now()
+formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
+print("Current system time:", formatted_time)
+```
+
+# 当てはまるかなぁ
+
+-   金融データは，packageでyfinanceというものがあるが，Yahoo Financeではスクレイピングを禁止している条項がある．システムに負担がかかるのが理由である．そのためここでは直接的に利用することはしない．
+
+-   無理に，縮小推定の例をもってくるけど，パラメター時変モデルで，MCMC使ってベイジアン推定もなさる流行りもののパッケージ．
+
+ということで，とりあえず過去3日間のデータで現在のデータを予測するという自己回帰モデルでやってみる．最終的なグラフは，予測したところがシェード付きのグラフになっている．
+
+## 
+
+```{python}
+#| label: get_data
+############### オリエンタル・ランドの株価 ###############
+url = "https://raw.githubusercontent.com/hhayami/lectures/master/data/DisneyPrice.csv"
+data = pd.read_csv(url)
+data['Date'] = pd.to_datetime(data['Date'])
+data.set_index('Date', inplace=True)
+```
+
+```{python}
+#| label: Simple_Graph
+plt.close('all')
+plt.figure()
+# Plot the data with Bollinger Bands and Volume
+data['Close'].plot(label='Close Price')
+data['Volume'].plot(secondary_y=True, label='Volume')
+data['UpperBB'] = data['Close'].rolling(20).mean() + 2*data['Close'].rolling(20).std()
+data['LowerBB'] = data['Close'].rolling(20).mean() - 2*data['Close'].rolling(20).std()
+data['UpperBB'].plot(label='Upper BB')
+data['LowerBB'].plot(label='Lower BB')
+_=plt.legend()
+plt.show()
+```
+
+```{python}
+#| label: sm_OLS
+# Prepare the data for modeling
+data['OpCl'] = data['Open'] - data['Close']
+data['OpHi'] = data['Open'] - data['High']
+data['Lag1_OpHi'] = data['OpHi'].shift(1)
+data['Lag2_OpHi'] = data['OpHi'].shift(2)
+data['Lag3_OpHi'] = data['OpHi'].shift(3)
+
+model_data = data.dropna()
+model = sm.OLS(model_data['OpCl'], sm.add_constant(model_data[['OpHi', 'Lag1_OpHi', 'Lag2_OpHi', 'Lag3_OpHi']]))
+result = model.fit()
+print(result.summary())
+
+plt.close('all')
+_=plt.figure()
+# Trade model
+data['Forecast'] = result.predict(sm.add_constant(model_data[['OpHi', 'Lag1_OpHi', 'Lag2_OpHi', 'Lag3_OpHi']]))
+_= data[['OpCl', 'Forecast']].plot()
+plt.show()
+```
+
+```{python}
+#| label: 月別のReturnのプロット
+plt.close('all')
+_=plt.figure()
+# Monthly returns
+monthly_returns = data['Close'].resample('ME').ffill().pct_change()
+_=monthly_returns.plot()
+plt.show()
+```
+
+```{python}
+#| label: shrinkageTimeVaryingParameter
+# Prepare data for shrinkage model
+n = len(model_data)
+n_T = 3000
+
+OLand_train = pd.DataFrame({
+    'OpCl': model_data['OpCl'][0:n_T],
+    'Lag1_OpHi': model_data['Lag1_OpHi'][0:n_T],
+    'Lag2_OpHi': model_data['Lag2_OpHi'][0:n_T],
+    'Lag3_OpHi': model_data['Lag3_OpHi'][0:n_T],
+})
+
+OLand_test = pd.DataFrame({
+    'OpCl': model_data['OpCl'][n_T+1:n],
+    'Lag1_OpHi': model_data['Lag1_OpHi'][n_T+1:n],
+    'Lag2_OpHi': model_data['Lag2_OpHi'][n_T+1:n],
+    'Lag3_OpHi': model_data['Lag3_OpHi'][n_T+1:n],
+})
+
+# Fit a shrinkage model (using Bayesian Ridge Regression as a placeholder for shrinkTVP)
+from sklearn.linear_model import BayesianRidge
+shrink_model = BayesianRidge()
+
+shrink_model.fit(OLand_train[['Lag1_OpHi', 'Lag2_OpHi', 'Lag3_OpHi']], OLand_train['OpCl'])
+
+# Summary of the shrinkage model
+print("Coefficients:", shrink_model.coef_)
+print("Intercept:", shrink_model.intercept_)
+
+plt.close('all')
+_=plt.figure()
+# Forecast using the shrinkage model
+OLand_test['Forecast'] = shrink_model.predict(OLand_test[['Lag1_OpHi', 'Lag2_OpHi', 'Lag3_OpHi']])
+_=OLand_test[['OpCl', 'Forecast']].plot()
+plt.show()
+```
+
+# Standard Chart Analysis
+
+```{python}
+#| label: Chart_Analysis
+# 12 months
+month = 12
+# mfp plot settings
+kwargs = dict(type = 'candle', style = 'yahoo')
+
+def bollingerband(c, period):
+    bbma = c.rolling(window=period).mean()
+    bbstd = c.rolling(window=period).std()
+    bbh1 = bbma + bbstd
+    bbl1 = bbma - bbstd
+    bbh2 = bbma + bbstd * 2
+    bbl2 = bbma - bbstd * 2
+    bbh3 = bbma + bbstd * 3
+    bbl3 = bbma - bbstd * 3
+    return bbh1,bbl1,bbh2,bbl2,bbh3,bbl3
+
+def macd(c, n1, n2, ns):
+    ema_short = c.ewm(span=n1,adjust=False).mean()
+    ema_long = c.ewm(span=n2,adjust=False).mean()
+    macd = ema_short - ema_long
+    signal = macd.ewm(span=ns,adjust=False).mean()
+    histogram = macd - signal
+    histogramplus = histogram.where(histogram > 0, 0)
+    histogramminus = histogram.where(histogram < 0, 0)
+    return macd,signal,histogram,histogramplus,histogramminus
+
+def rsi(c, period):
+    diff = c.diff()
+    up = diff.copy()
+    down = diff.copy()
+    up = up.where(up > 0, np.nan)
+    down = down.where(down < 0, np.nan)
+    upma = up.ewm(span=period,adjust=False).mean()
+    downma = down.abs().ewm(span=period,adjust=False).mean()
+    rs = upma / downma
+    rsi = 100 - (100 / (1.0 + rs))
+    return rsi
+
+# type into float
+model_data['Open'] = model_data['Open'].astype(float)
+model_data['High'] = model_data['High'].astype(float)
+model_data['Low'] = model_data['Low'].astype(float)
+model_data['Close'] = model_data['Close'].astype(float)
+o = model_data['Open']
+c = model_data['Close']
+l = model_data['Low']
+h = model_data['High']
+
+period = 25
+p1=period-1
+df_v=pd.DataFrame({'Open': o.values.T[p1:], 'High': h.values.T[p1:], 'Low': l.values.T[p1:], 'Close': c.values.T[p1:], 'Volume': model_data['Volume'].values.T[p1:]}, index=model_data.index[p1:])
+
+# Bollinger Band (MA 25 days)
+bbh1,bbl1,bbh2,bbl2,bbh3,bbl3 = bollingerband(c, period)
+bbl1_v=bbl1[~np.isnan(bbl1)]
+bbl2_v=bbl2[~np.isnan(bbl2)]
+bbl3_v=bbl3[~np.isnan(bbl3)]
+
+bbh1_v=bbh1[~np.isnan(bbl1)]
+bbh2_v=bbh2[~np.isnan(bbl2)]
+bbh3_v=bbh3[~np.isnan(bbl3)]
+
+# MACD (short run=12, long run=26, signal=9)
+macd_,macdsignal,histogram,histogramplus,histogramminus = macd(c,12,26,9)
+# RSI (14 days)
+rsi_ = rsi(c, 14)
+
+tmp = macd_[p1:]
+macd_=tmp
+tmp = rsi_[p1:]
+rsi_=tmp
+tmp= macdsignal[p1:]
+macdsignal =tmp
+tmp=histogramplus[p1:]
+histogramplus=tmp
+tmp=histogramminus[p1:]
+histogramminus=tmp
+
+# Grid Spec figures hight 3:1:1
+fig = mpf.figure(figsize=(9.6, 9.6), style='starsandstripes')
+gs = fig.add_gridspec(3, 1, hspace=0, wspace=0, height_ratios=(3,1,1))
+(ax1,ax2,ax3) = gs.subplots(sharex='col')
+
+# axe 1 : Bollinger Bands
+bbargs = dict(ax=ax1, width=.5, linestyle='dashdot', color='black')
+# axe 2 : MACD
+macdargs = dict(ax=ax2, width=1, ylabel='MACD')
+# axe 3 : RSI
+rsiargs = dict(ax=ax3, width=1, ylabel='RSI')
+
+# add plot for matplot finance
+ap = [
+    mpf.make_addplot(bbh1_v, **bbargs),
+    mpf.make_addplot(bbl1_v, **bbargs),
+    mpf.make_addplot(bbh2_v, **bbargs),
+    mpf.make_addplot(bbl2_v, **bbargs),
+    mpf.make_addplot(bbh3_v, **bbargs),
+    mpf.make_addplot(bbl3_v, **bbargs),
+    mpf.make_addplot(macd_, **macdargs, color='blue'),
+    mpf.make_addplot(macdsignal, **macdargs, color='orange'),
+    mpf.make_addplot(histogramplus, **macdargs, color='red', type='bar'),
+    mpf.make_addplot(histogramminus, **macdargs, color='green', type='bar'),
+    mpf.make_addplot(rsi_, **rsiargs, color='blue')
+]
+
+x_indices = np.arange(len(df_v))
+
+plt.close('all')
+_=ax1.plot(x_indices, c[p1:].values, label='Close Price', color='black', linewidth=1)
+_=ax1.fill_between(x_indices, y1=bbh3_v.values, y2=bbl3_v.values, alpha=0.1, color='red', label='3 Sigma')
+_=ax1.fill_between(x_indices, y1=bbh2_v.values, y2=bbl2_v.values, alpha=0.15, color='blue', label='2 Sigma')
+_=ax1.fill_between(x_indices, y1=bbh1_v.values, y2=bbl1_v.values, alpha=0.2, color='yellow', label='1 Sigma')
+
+_=ax3.hlines(xmin=0, xmax=len(df_v)-1, y=25, linewidth=1, color='red', linestyle='--')
+_=ax3.hlines(xmin=0, xmax=len(df_v)-1, y=75, linewidth=1, color='red', linestyle='--')
+
+#  本来は不要なキャンドル描画の競合を避ける設定が望ましいですが、これで上書き連動します)
+mpf.plot(df_v, ax=ax1, addplot=ap, style='starsandstripes', type='candle', xrotation=30, ylabel='Price')
+```
+
+## The Fama-French 3 factor model
+
+```{python}
+#| label: FF3
+import requests, zipfile, io
+# Download Fama-French 3-factor data
+ff3_url = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/Japan_3_Factors_Daily_CSV.zip"
+ff3_zip = "ff3.zip"
+ff3_csv = "Japan_3_Factors_Daily.csv"
+
+r = requests.get(ff3_url)
+z = zipfile.ZipFile(io.BytesIO(r.content))
+z.extract(ff3_csv)
+
+FF3_Japan = pd.read_csv(ff3_csv, skiprows=6)
+
+# Convert dates
+FF3_Japan.columns = FF3_Japan.columns.str.strip()
+FF3_Japan['Date'] = pd.to_datetime(FF3_Japan['Unnamed: 0'].astype(str), format='%Y%m%d')
+FF3_Japan.set_index('Date', inplace=True)
+
+model_data['log_volume'] = np.log(model_data['Volume']+1) # There is a zero volume
+model_data['log_high_diff'] = np.log(model_data['High']).diff()
+model_data['log_volume_lag'] = model_data['log_volume'].shift(1)
+
+# Remove NaN values
+x = model_data[['log_high_diff', 'log_volume_lag']].dropna()
+x_v=pd.DataFrame({'log_high_diff': x['log_high_diff'], 'log_volume_lag':x['log_volume_lag']}, index=x.index)
+
+# Merge with existing data
+merged_data = pd.merge(x_v, FF3_Japan, on=['Date'], how='inner')
+del merged_data['Unnamed: 0']
+
+# Fama-French 3-factor model
+y_ff3=merged_data['log_high_diff']-merged_data['RF']
+X_ff3=merged_data.drop(columns=['RF','log_high_diff', 'log_volume_lag'])
+
+ff3_model = sm.OLS(y_ff3, X_ff3)
+ff3_fit = ff3_model.fit()
+
+print(ff3_fit.summary())
+
+# Plot FF3 model predictions
+plt.close('all')
+_=plt.figure()
+_=plt.plot(merged_data.index, merged_data['log_high_diff'], 'o', markersize=2, label='dlog Stock Price')
+_=plt.plot(y_ff3.index, ff3_fit.predict(), color='red')
+_=plt.xlabel('')
+_=plt.ylabel('dlog Stock Price')
+_=plt.title('Tokyo Disney Land')
+plt.show()
+```
+
+```{python}
+#| label: influence_analysis
+# Highlight influential points
+# Influence measures for the FF3 model
+ff3_influence = ff3_fit.get_influence()
+ff3_inf_idx = ff3_influence.summary_frame().index[ff3_influence.summary_frame()['dffits'] > 0.2].tolist()
+
+plt.close('all')
+_=plt.figure()
+_=plt.plot(x_v.index, x_v['log_high_diff'], 'o', markersize=2)
+_=plt.plot(ff3_inf_idx,y_ff3[ff3_inf_idx], 'o', markersize=5, color='red')
+_=plt.xlabel('')
+_=plt.ylabel('dlog Stock Price')
+_=plt.title('Tokyo Disney Land')
+plt.show()
+```
+
+```{python}
+#| label: Exclude outliers and fit the FF3 model again
+X_ff3_no_outliers = X_ff3.drop(ff3_inf_idx)
+y_ff3_no_outliers = y_ff3.drop(ff3_inf_idx)
+
+ff3_fit_no_outliers = sm.OLS(y_ff3_no_outliers, X_ff3_no_outliers).fit()
+print(ff3_fit_no_outliers.summary())
+
+# Plot FF3 model predictions without outliers
+plt.close('all')
+_=plt.figure()
+_=plt.plot(y_ff3_no_outliers.index, y_ff3_no_outliers, 'o', markersize=2, label='dlog Stock Price')
+_=plt.plot(y_ff3_no_outliers.index, ff3_fit_no_outliers.predict(), color='red')
+_=plt.xlabel('')
+_=plt.ylabel('dlog Stock Price')
+_=plt.title('Tokyo Disney Land')
+plt.show()
+```
+
+```{python}
+#| label: QQ plot for residuals of FF3 model without outliers
+residuals = ff3_fit_no_outliers.resid
+plt.close('all')
+_=plt.figure()
+_=qqplot(residuals, line='s')
+_=plt.title('Normal QQ plot')
+_=plt.suptitle('Check if the residual  ff3_fit.get_influence()is normally distributed')
+plt.show()
+```
