@@ -79,7 +79,7 @@ print("Current system time:", formatted_time)
 ```{python}
 #| label: get_data
 ############### オリエンタル・ランドの株価 ###############
-url = "https://raw.githubusercontent.com/hhayami/lectures/master/data/DisneyPrice.csv"
+url = "https://raw.githubusercontent.com/hitohayami/DataAnalysisBook/main/DisneyPrice.csv"
 data = pd.read_csv(url)
 data['Date'] = pd.to_datetime(data['Date'])
 data.set_index('Date', inplace=True)

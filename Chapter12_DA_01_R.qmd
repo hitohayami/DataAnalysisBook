@@ -46,7 +46,7 @@ if( length(grep('mac',RInfor))>0) {Kanji="HiraginoSans-W3"}
 
 ```{r}
 #| label: Read_Data
-url = "https://raw.githubusercontent.com/hhayami/lectures/master/data/DisneyPrice.csv"
+url = "https://raw.githubusercontent.com/hitohayami/DataAnaysisBook/main/DisneyPrice.csv"
 df <- read.csv(url, stringsAsFactors = FALSE)
 df$Date <- as.Date(df$Date, format = "%Y/%m/%d")
 ```
