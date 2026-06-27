@@ -1,5 +1,5 @@
 ---
-title: "第10回出席 (水2)"
+title: "第8章"
 subtitle: "AI(深層学習)によるfashion mnist画像識別: CNN/MLP"
 author: "ここは自分の名前に変える"
 format: docx
@@ -7,14 +7,6 @@ jupyter: python3
 editor: source
 always_allow_html: true
 ---
-
-## 感想
-
-===感想を次の行から書く=================================
-
-上から4行目の"　"の中は自分の名前に書き換えること！漢字OKです。
-
-===この下には書かない===================================
 
 ## 準備
 
