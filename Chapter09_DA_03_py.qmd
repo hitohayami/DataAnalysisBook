@@ -1,6 +1,6 @@
 ---
 title: "第9章 Example 3"
-author: "H2"
+author: "Name"
 format: html
 editor: source
 jupyter: python3
