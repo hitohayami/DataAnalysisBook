@@ -1,6 +1,6 @@
 ---
 title: "第10章 p-ハッキング"
-author: "早見　均"
+author: ""
 format: docx
 editor: visual
 ---
