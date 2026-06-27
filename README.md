@@ -8,4 +8,5 @@ This repository contains the source code for the book **<i>Knowledge and Techniq
 * **Languages**: R, Python
 
 ## Note
-The output results (primarily graphics in MS Word format) are currently work in progress and will be added later.
+Chapter12_DA_01.qmd (Python and R) has been updated due to issues with yfinance and quantmod accessing unauthorized Yahoo Finance data.
+Moving forward, Quarto qmd files will be updated along with future package updates.
