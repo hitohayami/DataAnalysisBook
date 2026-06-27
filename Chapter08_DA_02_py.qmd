@@ -30,7 +30,7 @@ always_allow_html: true
 ## keras によるMNIST
 
 ```{python}
-#| label: 念のためkears3 と jax の アップグレード・インストール
+#| label: upgrade_install_kears3_and_jax
 #| message: false
 #| include: false
 %pip3 install --upgrade --quiet keras jax flax jupyter matplotlib scikit-learn tfds-nightly seaborn tensorflow --quiet
