@@ -1,6 +1,6 @@
 ---
 title: "第10章 local fdr"
-author: "早見　均"
+author: "Name"
 format: docx
 editor: source
 ---
