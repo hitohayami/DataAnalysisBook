@@ -7,6 +7,25 @@ format: docx
 jupyter: python3
 ---
 
+## スライドの練習
+
+```{python}
+#| label: Heart
+import numpy as np
+import matplotlib.pyplot as plt
+
+theta = np.arange(-np.pi, np.pi, 0.0001*np.pi)
+x = np.cos(theta)
+y = np.cos(theta)**(2/3) + np.sin(theta)
+
+plt.plot(x, y, '-b', label='x=cos(theta)')
+plt.plot(-x, y, '-r', label='x=-cos(theta)')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.legend(loc='upper right')
+plt.show()
+```
+
 ```{python}
 #| label: setup
 #| echo: FALSE
