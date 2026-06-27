@@ -7,39 +7,6 @@ format: docx
 jupyter: python3
 ---
 
-まず，名前を直すこと．提出するファイル名に名前や学籍番号はいらない．自動で付けられるため．"と"の間に名前を入れないとエラーになります． うまくいかなかったら，.qmdファイルのまま感想を書いて提出してください．
-
-## 感想を書いてください
-
-======= ここから．この下に書く．========
-
-例：また難しい課題かな．履修失敗かもね！
-
-履修していれば研究会・研究演習の担当教員は？
-
-======= ここまで．この下には書かない．========
-
-{{< pagebreak >}}
-
-## スライドの練習
-
-```{python}
-#| label: Heart
-import numpy as np
-import matplotlib.pyplot as plt
-
-theta = np.arange(-np.pi, np.pi, 0.0001*np.pi)
-x = np.cos(theta)
-y = np.cos(theta)**(2/3) + np.sin(theta)
-
-plt.plot(x, y, '-b', label='x=cos(theta)')
-plt.plot(-x, y, '-r', label='x=-cos(theta)')
-plt.xlabel('x')
-plt.ylabel('y')
-plt.legend(loc='upper right')
-plt.show()
-```
-
 ```{python}
 #| label: setup
 #| echo: FALSE
