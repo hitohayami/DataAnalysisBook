@@ -31,7 +31,7 @@ always_allow_html: true
 ## keras によるMNIST
 
 ```{python}
-#| label: 念のためkears3 と jax の アップグレード・インストール
+#| label: update_install_kears3_and_jax
 #| message: false
 #| include: false
 # tensorflowはpython 3.13.1以降未対応
@@ -41,7 +41,7 @@ always_allow_html: true
 ## Kerasからfashon MNISTのデータのダウンロードとデータの分割
 
 ```{python}
-#| label: データの準備
+#| label: Preparation_Data
 import numpy as np
 import os
 
@@ -71,7 +71,7 @@ print(x_test.shape[0], "test samples")
 活性化関数はReLUで最終的にはsoftmaxである．
 
 ```{python}
-#| label: MLPモデルの設定
+#| label: MLP_model
 model_MLP = keras.models.Sequential([
     keras.Input(shape=(28, 28)),
     keras.layers.Flatten(),
@@ -86,7 +86,7 @@ model_MLP.summary()
 モデルのコンパイルとfitting．
 
 ```{python}
-#| label: MLPモデルのコンパイルと当てはめ
+#| label: Compile_and_Fit_MLP_model
 batch_size = 128
 
 model_MLP.compile(loss="sparse_categorical_crossentropy",
@@ -108,7 +108,7 @@ np.save('fashion_mnist_MLP_hist.npy',hist_MLP.history)
 ```
 
 ```{python}
-#| label: MLPモデルの学習過程の表示
+#| label: Display_learning_process_of_MLP_model
 
 import matplotlib.pyplot as plt
 
@@ -135,7 +135,7 @@ plt.show()
 ```
 
 ```{python}
-#| label: MLPモデルの予測 test
+#| label: MLP_prediction_test
 os.getcwd()
 model_MLP = keras.saving.load_model("fashion_mnist_MLP.keras")
 
@@ -159,7 +159,7 @@ epoch=20にしようかと思ったが，実行時間が70分を超えるとや�
 この部分は時間がかかるので，一度実行すると，final_model_01.kerasというファイルができるので，これがあれば，省略できる．
 
 ```{python}
-#| label: CNN Model parametersの表示
+#| label: CNN Model parameters
 num_classes = 10
 input_shape = (28, 28, 1)
 
@@ -181,7 +181,7 @@ model.summary()
 ```
 
 ```{python}
-#| label: epochs=20 MacのM2で25分くらい，Windows Xeon(古い) 70分はかかる
+#| label: epochs=20_takes_long
 #| message: false
 #| warning: false
 if (not os.path.exists("fashion_mnist_01.keras")) :
@@ -218,7 +218,7 @@ else:
 ```
 
 ```{python}
-#| label: CNN-モデルの予測 test
+#| label: CNN-prediction_test
 os.getcwd()
 model = keras.saving.load_model("fashion_mnist_01.keras")
 
@@ -234,7 +234,7 @@ print("正解率{0}%".format(s/n*100))
 ```
 
 ```{python}
-#| label: CNN-学習プロセスの表示
+#| label: Display_CNN
 import matplotlib.pyplot as plt
 
 plt.close()
@@ -260,7 +260,7 @@ plt.show()
 ```
 
 ```{python}
-#| label: CNN結果の例示
+#| label: CNN_results
 plt.close()
 
 W = 16  # 横に並べる個数
