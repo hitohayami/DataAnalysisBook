@@ -1,0 +1,214 @@
+---
+title: "第10章 ESLIIの再考，Benjamini-Hochberg FDR コントロール"
+author: "早見　均"
+editor: source
+format: docx
+jupyter: python3
+---
+
+## 実行に必要な準備
+
+```{python}
+#| label: setup
+#| include: False
+#| echo: False
+
+import importlib
+import subprocess
+import sys
+
+# インストールしたいパッケージのリスト
+packages_to_install  = ["numpy", "matplotlib","certifi","requests", "scipy","jupyter","pandas","statsmodels","seaborn","scikit-learn","datetime"]
+
+def install_if_missing(package_name):
+  try:
+    importlib.import_module(package_name)
+    print(f"{package_name} は既にインストールされています。")
+  except ImportError:
+    print(f"{package_name} がインストールされていません。インストールを開始します...")
+    try:
+      subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+      print(f"{package_name} のインストールが完了しました。")
+    except subprocess.CalledProcessError as e:
+      print(f"{package_name} のインストール中にエラーが発生しました: {e}")
+
+# 各パッケージのインストール状況を確認し、必要であればインストール
+for package in packages_to_install:
+  install_if_missing(package)
+from datetime import datetime
+current_time = datetime.now()
+formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
+print("Current system time:", formatted_time)
+```
+
+```{python}
+#| label: get_Data
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.stats as stats
+
+# 1. データの読み込みと加工
+url_y = 'https://hastie.su.domains/ElemStatLearn/datasets/radsens.y'
+ytmp = pd.read_csv(url_y, sep=r'\s+', header=None)
+
+# 1行目と2行目を結合して1次元化し、欠損値（NaN）を除去してベクトル化
+y = pd.concat([ytmp.iloc[0], ytmp.iloc[1]]).dropna().to_numpy()
+n_y = len(y)
+print(f"yのサイズ (n_y): {n_y}")
+
+# xデータの読み込み
+url_x = 'https://hastie.su.domains/ElemStatLearn/datasets/radsens.x'
+xtmp = pd.read_csv(url_x, sep=r'\s+', header=None)
+
+x = xtmp.to_numpy()
+n_x = x.shape[0]
+
+# 2. 複数のt検定の実行
+p_V = []
+t_V = []
+
+for j in range(n_x):
+    group1 = x[j, 0:44]
+    group2 = x[j, 44:58]
+    # ウェルチのt検定
+    t_res = stats.ttest_ind(group1, group2, equal_var=False)
+    t_V.append(t_res.statistic)
+    p_V.append(t_res.pvalue)
+
+# NumPy配列に変換
+t_V = np.array(t_V)
+p_V = np.array(p_V)
+p_Vs = np.sort(p_V)
+
+# 3. 統計量の出力
+print(f"t値の最小値と最大値: [{t_V.min():.4f}, {t_V.max():.4f}]")
+
+# 有意な遺伝子の検出 (自由度46のt分布において、両側5%水準で有意なもの)
+t_critical = stats.t.ppf(0.975, df=56)
+id_sig = np.where(np.abs(t_V) > t_critical)[0]
+print(f"有意差のあった遺伝子数: {len(id_sig)}")
+
+# 4. グラフの描画
+plt.close('all')
+_=plt.figure(figsize=(8, 5))
+
+# ヒストグラム
+_=plt.hist(t_V, bins=75, density=True, color='white', edgecolor='black', alpha=0.7, label='Histogram of t-V')
+
+# 理論的なt分布の曲線 (自由度56)
+t_range = np.linspace(-5, 5, 10000)
+_=plt.plot(t_range, stats.t.pdf(t_range, df=56), color='black', linestyle='--', linewidth=2, label='t-distribution (df=56)')
+
+# カーネル密度推定
+density = stats.gaussian_kde(t_V)
+_=plt.plot(t_range, density(t_range), color='blue', linewidth=2, label='Kernel Density')
+
+# グラフのレイアウト調整
+_=plt.xlim(-5, 5)
+_=plt.ylim(0, 0.4)
+_=plt.xlabel('t-value')
+_=plt.ylabel('Density')
+_=plt.legend()
+plt.show()
+```
+
+# Hastieの例の再現
+
+```{python}
+#| label: fig1501
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+from sklearn.neighbors import KernelDensity
+
+# Load the data
+data_file = "https://hastie.su.domains/CASI_files/DATA/prostz.txt"
+x = pd.read_csv(data_file, header=None).values
+
+# Define breaks
+brks = np.arange(-4.5, 5.3, 0.2)
+
+# Create histogram
+H, bin_edges = np.histogram(x, bins=brks, density=False)
+density = H / np.diff(bin_edges) / H.sum()
+
+# Scale factors
+sum_density = density.sum()
+sum_counts = H.sum()
+scale_x = sum_counts / sum_density
+
+# Generate normal distribution N(0,1) scaled by counts
+z = np.arange(-4.5, 5.4, 0.01)
+s = 1
+phi = norm.pdf(z, scale=s) * scale_x
+
+# Kernel density estimation
+kde = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(x)
+log_dens = kde.score_samples(z[:, None])
+fX_y = np.exp(log_dens) * scale_x
+
+# Plot histogram with density estimation and normal distribution
+plt.close('all')
+_=plt.figure()
+_=plt.hist(x, bins=brks, density=False, alpha=0.5, color='gray', edgecolor='black')
+_=plt.plot(z, fX_y, color='blue', linewidth=3, label='KDE')
+_=plt.plot(z, phi, color='red', linewidth=3, label='Normal N(0,1)')
+_=plt.xlabel('z-values')
+_=plt.ylabel('Counts')
+_=plt.ylim(0, 500)
+_=plt.legend()
+plt.show()
+```
+
+定理：Benjamini-Hochberg FDR コントロール
+
+もし成立している帰無仮説に対応する$p-$値が，お互いに独立であるならば， \[ \textrm{FDR}(\mathcal{D}\_q)=\pi\_0{q}{\le}q,\quad \textrm{where } \pi\_0=N_0/N \tag{1} \] いいかえると，$\mathcal{D}_q$は，level $\pi_0{q}$でFDRをコントロールしている． 帰無仮説の割合$\pi_0$は未知である(推定は可能である)． そのため．通常は$\mathcal{D}_q$はlevel ${q}$でFDRをコントロールしているという． 大規模検定の問題では，ほとんどの場合が帰無である場合に探している，つまり$\pi_0$が1に近い状況なので，そんなに多くは失われないのである． $\pi_0$が1に近いとは，少ない個数の帰無ではないものを見つけるのが目的であることを示している． $q=1$というのが典型的な現状の選択である．
+
+FDRコントロールの人気は，有意性をいうのにFWERよりもずっと寛容だからという事実に依存している．帰無ではない場合を示すのに「有意」という古典的な用語は，FDRコントロールの場合には正しくはない．FDRコントロール，とくにベイジアンの関係のものでは，適切ではなく，有意ではなく「興味ぶかいinteresting」という用語を使う．
+
+Holmの手続きでは，つぎの不等号が成立するときに帰無仮説H$_{0(i)}$を棄却する． \[ p\_{(i)}{\le}\textrm{Threshold(Holm's)} = \frac{\alpha}{N-i+1} \tag{2} \] $\mathcal{D}_q$はつぎの境界となる \[ p\_{(i)}{\le}\textrm{Threshold($\mathcal{D}_q$)} = \frac{q}{N}i \tag{3} \] 関心のある通常の領域では，つまり大きな$N$と小さな$i$では，つぎの比は，$i$が大きくなると線形で大きくなる． \[ \frac{\textrm{Threshold($\mathcal{D}_q$)}}{\textrm{Threshold(Holm's)}} = \frac{q}{\alpha}\left( 1-\frac{i-1}{N} \right)i \tag{4} \]
+
+```{python}
+#| label: fig1503
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+
+# Length of the data
+N = len(x)
+
+# Sort the data in decreasing order
+zi = np.sort(x,axis=0) # [::-1]
+# Compute p-values
+pv = norm.cdf(zi)
+
+# Index values
+iv = np.arange(1, 51)
+
+# Holm-Bonferroni method
+alpha = 0.1
+Holm = alpha / (N - iv + 1)
+
+# False Discovery Rate (FDR)
+q = 0.1
+FDR = (q / N) * iv
+
+# Plottinď
+plt.close('all')
+_=plt.figure()
+_=plt.plot(iv, pv[:50], 'o', color='blue', markersize=3, label='p-value')
+_=plt.plot(iv, FDR, color='red', label='FDR')
+_=plt.plot(iv, Holm, color='green', label='Holm')
+
+_=plt.xlabel('index i')
+_=plt.ylabel('p-value')
+_=plt.title('')
+_=plt.text(48, 0.00073, 'FDR', color='red')
+_=plt.text(28, 0.00038, 'i=28', color='red')
+_=plt.text(6, -0.00002, 'i=6', color='red')
+_=plt.legend()
+plt.show()
+```

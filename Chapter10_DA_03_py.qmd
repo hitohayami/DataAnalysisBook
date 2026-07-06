@@ -1,0 +1,143 @@
+---
+title: "第10章 遺伝子データの利用"
+author: "早見　均"
+format: docx
+editor: source
+---
+
+## 実行に必要な準備
+
+```{python}
+#| label: setup
+#| include: False
+#| echo: False
+
+import importlib
+import subprocess
+import sys
+
+# インストールしたいパッケージのリスト
+packages_to_install  = ["numpy", "matplotlib","certifi","requests", "scipy","jupyter","pandas","statsmodels","seaborn","scikit-learn","datetime","GEOparse"]
+
+def install_if_missing(package_name):
+  try:
+    importlib.import_module(package_name)
+    print(f"{package_name} は既にインストールされています。")
+  except ImportError:
+    print(f"{package_name} がインストールされていません。インストールを開始します...")
+    try:
+      subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+      print(f"{package_name} のインストールが完了しました。")
+    except subprocess.CalledProcessError as e:
+      print(f"{package_name} のインストール中にエラーが発生しました: {e}")
+
+# 各パッケージのインストール状況を確認し、必要であればインストール
+for package in packages_to_install:
+  install_if_missing(package)
+from datetime import datetime
+current_time = datetime.now()
+formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
+print("Current system time:", formatted_time)
+```
+
+```{python}
+#| label: GEOparse_data
+import GEOparse
+import pandas as pd
+import numpy as np
+import scipy.stats as stats
+
+# 1. GEOデータのダウンロードと読み込み
+print("データをダウンロード中...")
+gse = GEOparse.get_GEO(geo="GSE1725", destdir="./")
+
+gsm_names = list(gse.gsms.keys())
+n = len(gsm_names)
+
+# 最初のサンプルから遺伝子数（行数）を取得
+first_gsm = gse.gsms[gsm_names[0]]
+n_DNA = first_gsm.table.shape[0]
+
+print(f"サンプル・サイズ (n): {n}")
+print(f"遺伝子数 (n_DNA): {n_DNA}")
+
+# 2. データの集約 (VALUE と ABS_CALL)
+# 全サンプルのデータを一度にDataFrameにまとめます
+value_dict = {}
+abs_call_dict = {}
+
+# 遺伝子IDを取得
+gene_ids = first_gsm.table['ID_REF'].values if 'ID_REF' in first_gsm.table.columns else first_gsm.table.index.values
+
+for gsm_id in gsm_names:
+    gsm_table = gse.gsms[gsm_id].table
+    value_dict[gsm_id] = gsm_table['VALUE'].values
+    abs_call_dict[gsm_id] = gsm_table['ABS_CALL'].values
+
+df_value = pd.DataFrame(value_dict, index=gene_ids)
+df_abs = pd.DataFrame(abs_call_dict, index=gene_ids)
+
+# 3. 実験条件 (Mock, IR, UV) の判定
+# R: UVIRMock=sapply(gse@gsms, function(x) x@header$title)
+i_CT = []
+i_Mock, i_IR, i_UV = 0, 0, 0
+
+for gsm_id in gsm_names:
+    title = gse.gsms[gsm_id].metadata['title'][0]
+    # ハイフンで分割して2番目の要素を取得 (R: strsplit(..., '-')[[1]][2])
+    c_K = title.split('-')[1].strip()
+    
+    if c_K == "Mock":
+        i_Mock += 1
+        i_CT.append(0)
+    elif c_K == "IR":
+        i_IR += 1
+        i_CT.append(1)
+    elif c_K == "UV":
+        i_UV += 1
+        i_CT.append(2)
+    else:
+        i_CT.append(-1) # 該当しない場合
+
+print(f"Mock数: {i_Mock}, IR数: {i_IR}, UV数: {i_UV}")
+
+# 4. フィルタリング (すべてのサンプルで ABS_CALL == 'P' の遺伝子を抽出)
+j_AllP = (df_abs == 'P').all(axis=1)
+
+# 条件を満たす発現量データのみを抽出 (R: Xd)
+df_filtered = df_value[j_AllP].astype(float)
+n_Xd = df_filtered.shape[0]
+print(f"フィルタリング後の遺伝子数 (n_Xd): {n_Xd}")
+
+# 5. グループごとのデータ分割
+i_CT = np.array(i_CT)
+X_Mock = df_filtered.iloc[:, i_CT == 0].values
+X_IR = df_filtered.iloc[:, i_CT == 1].values
+X_UV = df_filtered.iloc[:, i_CT == 2].values
+
+# 6. 一括t検定の実行
+# equal_var=False
+
+print("t検定を実行中...")
+res_MockIR = stats.ttest_ind(X_Mock, X_IR, axis=1, equal_var=False)
+res_MockUV = stats.ttest_ind(X_Mock, X_UV, axis=1, equal_var=False)
+res_IRUV = stats.ttest_ind(X_IR, X_UV, axis=1, equal_var=False)
+
+# 結果の格納（t統計量とp値）
+t_MockIR, p_MockIR = res_MockIR.statistic, res_MockIR.pvalue
+t_MockUV, p_MockUV = res_MockUV.statistic, res_MockUV.pvalue
+t_IRUV, p_IRUV = res_IRUV.statistic, res_IRUV.pvalue
+
+print("解析が完了しました！")
+print(i_UV)
+print(len(X_UV))
+print(len(p_MockUV))
+print(len(p_MockIR))
+print(len(p_IRUV))
+count = (p_MockUV < 0.05).sum()
+print(count)
+count = (p_MockIR < 0.05).sum()
+print(count)
+count = (p_IRUV < 0.05).sum()
+print(count)
+```

@@ -1,6 +1,6 @@
 ---
-title: "第10章"
-author: "Name"
+title: "第10章 ESLIIの再考，Benjamini-Hochberg FDR コントロール"
+author: "早見　均"
 format: docx
 editor: source
 ---
@@ -28,30 +28,10 @@ ytmp=read.table('https://hastie.su.domains/ElemStatLearn/datasets/radsens.y',fil
 ytt=c(ytmp[1,],ytmp[2,])
 yt=unlist(ytt)
 yt=na.omit(yt)
-y=as.vector(ytt)
+y=as.vector(yt)
 (n_y=length(y))
 
-# n_ytmp=length(ytmp)
-# y=NULL
-# for( i in 1:n_ytmp){
-#   tmp=strsplit(ytmp[[i]],' ')
-#   y_tmp=as.numeric(tmp[[1]])
-#   y=c(y,y_tmp)
-# }
-# y=na.omit(y)
-# (n_y=length(y))
-
 xtmp=read.table('https://hastie.su.domains/ElemStatLearn/datasets/radsens.x',header=F)
-
-# n_xtmp=length(xtmp)
-
-# x_t=y
-# for( j in 1:n_xtmp){
-#   tmp=strsplit(xtmp[[j]],' ')
-#   x_tmp=as.numeric(tmp[[1]])
-#   x_tmp=na.omit(x_tmp)
-#   x_t=rbind(x_t,x_tmp)
-# }
 ```
 
 ```{r}

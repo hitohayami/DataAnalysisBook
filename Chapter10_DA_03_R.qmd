@@ -1,6 +1,6 @@
 ---
 title: "第10章 local fdr"
-author: "Name"
+author: "早見　均"
 format: docx
 editor: source
 ---
@@ -130,4 +130,10 @@ for( i in 1:n_Xd){
   tmp=t.test(X_IR,X_UV)
   p_IRUV[i]=tmp$p.value;  t_IRUV[i]=tmp$statistic
 }
+length(p_MockIR)
+length(p_MockUV)
+length(p_IRUV)
+length(which(p_MockUV<0.05))
+length(which(p_MockIR<0.05))
+length(which(p_IRUV<0.05))
 ```

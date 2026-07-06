@@ -1,6 +1,6 @@
 ---
 title: "第10章 p-ハッキング"
-author: ""
+author: "早見　均"
 format: docx
 editor: visual
 ---
@@ -27,7 +27,8 @@ options(digits=4)
 
 とりあえず，いわゆるp-値ハッキングをやろう．
 
-データを使った論文を書いているほとんどみんながやっている悪いクセ． なくならない限り，false discovery の山が築き上げられていく．
+データを使った論文を書いているほとんどみんながやっている悪いクセ．
+なくならない限り，false discovery の山が築き上げられていく．
 
 ```{r Regression_Parameters_Hypothesis_Test1}
 set.seed(883)
@@ -73,7 +74,8 @@ sum(abs(pv)<=0.05)/length(pv)
 
 ## p-値ハッキングの方法2: サンプル・サイズが比較的小さい(n=25)
 
-説明変数の数を増やすと，統計的に有意に計算されるパラメターの数も比例的に増加する． あたりまえ．
+説明変数の数を増やすと，統計的に有意に計算されるパラメターの数も比例的に増加する．
+あたりまえ．
 
 ```{r Regression_Parameters_Hypothesis_Test2}
 set.seed(883)
