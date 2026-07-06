@@ -10,4 +10,4 @@ This repository contains the source code for the book **<i>Knowledge and Techniq
 ## Note
 Chapter12_DA_01.qmd (Python and R) has been updated due to issues with yfinance and quantmod accessing unauthorized Yahoo Finance data.
 Moving forward, Quarto qmd files will be updated along with future package updates.
-Chapter10_DA_01_py.qmd - Chapter10_DA_04_py.qmd are newly added on 6 July 2026.
+Chapter10_DA_01_py.qmd - Chapter10_DA_04_py.qmd are added on 6 July 2026.
